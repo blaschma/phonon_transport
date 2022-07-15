@@ -1,6 +1,25 @@
 import numpy as np
 from turbomoleOutputProcessing import  turbomoleOutputProcessing as top
 
+
+def filter_coord(coord):
+    """
+    Filters coord path to remove fixed atoms -> CC part
+    Args:
+        coord:
+
+    Returns:
+        coord
+    """
+    coord_filtered = list()
+    for i in range(0,len(coord)):
+        if(len(coord[i]) == 5):
+            continue
+        else:
+            coord_filtered.append(coord[i])
+    return coord_filtered
+
+
 def write_g98_file(filename, coord, displacement_matrix):
     #TODO: Check
     bohr2ang = 0.529177249
@@ -50,7 +69,7 @@ def write_g98_file(filename, coord, displacement_matrix):
         f.write("   " + str(atom) + "  " + str(AN) + "     " + str(x_1) + "   "  + str(y_1) + "   " + str(z_1) + "     " + str(x_2) + "   "  + str(y_2) + "   " + str(z_2) + "     "+ str(x_3) + "   "  + str(y_3) + "   " + str(z_3) + "\n")
     f.close()
 
-def write_nmd_file(filename, coord, displacement_matrix, n_channel_max):
+def write_nmd_file(filename, coord, displacement_matrix, n_channel_max, use_mass_scaling=True):
 
     bohr2ang = 0.529177249
     digits = 6
@@ -59,10 +78,14 @@ def write_nmd_file(filename, coord, displacement_matrix, n_channel_max):
     atom_string = ""
     modes = list()
     mass_scaling = list()
+
     for i in range(0, len(coord)):
         atomic_type = coord[i][3]
         # mass scaling !!!!
-        factor = 1 / np.sqrt(top.atom_weight(atomic_type))
+        if(use_mass_scaling == True):
+            factor = 1 / np.sqrt(top.atom_weight(atomic_type))
+        else:
+            factor = 1
         mass_scaling.append(factor)
 
         x = float(coord[i][0]) * bohr2ang

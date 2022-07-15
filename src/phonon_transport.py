@@ -34,6 +34,12 @@ har2pJ = 4.35974e-6
 
 
 class PhononTransport:
+	"""Class for phonon transport calculations
+
+	This class can be used for phonon transport calculations. It follows the
+
+
+	"""
 
 	def __init__(self, data_path, coord_path, n_l, n_r, gamma, E_D, M_L, M_C, N, T_min, T_max, kappa_grid_points, in_plane, eigenchannel, every_nth,
 				 channel_max):
@@ -289,7 +295,7 @@ class PhononTransport:
 
 		"""
 
-		eigenvalues, eigenvectors = np.linalg.eigh(trans_prob_matrix + np.ones(trans_prob_matrix.shape) * (1.j * 1E-15))
+		eigenvalues, eigenvectors = np.linalg.eigh(trans_prob_matrix + 0*np.ones(trans_prob_matrix.shape) * (1.j * 1E-15))
 		# sort eigenvalues and eigenvecors
 		idx = eigenvalues.argsort()[::-1]
 		eigenvalues = eigenvalues[idx]
@@ -358,8 +364,8 @@ class PhononTransport:
 
 		Gamma_L = -2 * np.imag(sigma_L)
 		Gamma_R = -2 * np.imag(sigma_R)
-		trans_prob_matrix = np.dot(np.dot(Gamma_L, self.G_cc[i]), np.dot(Gamma_R, np.conj(np.transpose(self.G_cc[i]))))
-
+		#trans_prob_matrix = np.dot(np.dot(Gamma_L, self.G_cc[i]), np.dot(Gamma_R, np.conj(np.transpose(self.G_cc[i]))))
+		trans_prob_matrix = np.dot(np.dot(self.G_cc[i], Gamma_L), np.dot(np.conj(np.transpose(self.G_cc[i])), Gamma_R, ))
 		return trans_prob_matrix
 
 	def calc_eigenchannel(self, E):
@@ -542,6 +548,7 @@ if __name__ == '__main__':
 			eigenchannel = json.loads(str(cfg.get('Eigenchannel', 'eigenchannel')).lower())
 			every_nth = int(cfg.get('Eigenchannel', 'every_nth'))
 			channel_max = int(cfg.get('Eigenchannel', 'channel_max'))
+			#TODO Handle input -1
 		else:
 			eigenchannel = False
 			every_nth = None
