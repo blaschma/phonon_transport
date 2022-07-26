@@ -31,6 +31,14 @@ har2J = 4.35974E-18
 bohr2m = 5.29177E-11
 u2kg = 1.66054E-27
 har2pJ = 4.35974e-6
+J2meV = 6.24150934190e+21
+meV2J = 1.60217656535E-22
+#This unit is calulated from the greens function: w**2 and D have to have the same unit
+unit2SI = np.sqrt(9.375821464623672e+29)
+#unit2SI = 9.375821464623672e+29
+#s2au = 2.4188843265857E-17
+#unit2SI = 1/s2au
+
 
 
 class PhononTransport:
@@ -54,23 +62,31 @@ class PhononTransport:
 		self.channel_max = channel_max
 		self.M_L = M_L
 		self.M_C = M_C
+		#pfusch
+		self.M_L = "test"
+		self.M_C = "test"
 		self.N = N
 		self.E_D = E_D
 		# convert to J
-		E_D = E_D * 1.60217656535E-22
+		E_D = E_D * meV2J
 		# convert to 1/s
 		w_D = E_D / h_bar
-		# convert to har/(bohr**2*u)
-		self.w_D = w_D / np.sqrt(9.375821464623672e+29)
+		# convert to har*s/(bohr**2*u)
+		self.w_D = w_D / unit2SI
 		self.temperature = np.linspace(T_min, T_max, kappa_grid_points)
 
-		self.w = np.linspace(0.0, self.w_D * 1.1, N)
-		self.E = self.w * np.sqrt(9.375821464623672e+29) * h_bar / (1.60217656535E-22)
+		# pfusch!!
+		self.dimension = 1
+		self.k_x = 0.1*(eV2hartree / ang2bohr ** 2)
+
+
+		self.w = np.linspace(0, self.w_D * 1.1, N)
+		self.E = self.w * unit2SI * h_bar * J2meV
 		self.i = np.linspace(0, self.N, self.N, False, dtype=int)
-		g0 = self.calculate_g0(self.w, self.w_D)
-		self.Sigma = self.calculate_Sigma(self.w, g0, gamma, self.M_L, self.M_C)
+		self.g0 = self.calculate_g0(self.w, self.w_D)
+		self.Sigma = self.calculate_Sigma(self.w, self.g0, gamma, self.M_L, self.M_C)
 		# set up dynamical matrix K
-		self.D = top.create_dynamical_matrix(filename_hessian, self.coord_path, t2SI=False)
+		self.D = top.create_dynamical_matrix(filename_hessian, self.coord_path, t2SI=False, dimensions=self.dimension)
 		self.coord = top.read_coord_file(self.coord_path)
 
 		self._G_cc = np.ones((N,self.D.shape[0], self.D.shape[1]), dtype=complex)
@@ -78,6 +94,7 @@ class PhononTransport:
 		self._T = np.ones(N)*-1
 		self._kappa = np.ones(N) * -1
 		self.T_channel_vals = np.ones((N,self.channel_max), dtype=complex)
+
 
 	@property
 	def G_cc(self):
@@ -133,18 +150,34 @@ class PhononTransport:
 		Returns:
 		g0	(array_like) Surface greens function g0
 		"""
+		# pfusch!!
+		if(False):
+			def im_g(w):
+				if (w <= w_D):
+					Im_g = -np.pi * 3.0 * w / (2 * w_D ** 3)
+				else:
+					Im_g = 0
+				return Im_g
 
-		def im_g(w):
-			if (w <= w_D):
-				Im_g = -np.pi * 3.0 * w / (2 * w_D ** 3)
-			else:
-				Im_g = 0
-			return Im_g
+			Im_g = map(im_g, w)
+			Im_g = np.asarray(list(Im_g))
+			Re_g = -np.asarray(np.imag(scipy.signal.hilbert(Im_g)))
+			g0 = np.asarray((Re_g + 1.j * Im_g), complex)
+		else:
+			g0 = 1/(2*self.k_x*w)*(w-np.sqrt(w**2-4*self.k_x, dtype=complex))
 
-		Im_g = map(im_g, w)
-		Im_g = np.asarray(list(Im_g))
-		Re_g = -np.asarray(np.imag(scipy.signal.hilbert(Im_g)))
-		g0 = np.asarray((Re_g + 1.j * Im_g), complex)
+
+		fig, ax1 = plt.subplots()
+		#"""
+		ax1.plot(w, np.imag(g0), color="red", label="Im(g0)")
+		ax1.plot(w, np.real(g0), color="green", label="Re(g0)")
+		ax1.set_ylim(-12000,8000)
+		plt.grid()
+		plt.legend()
+		plt.show()
+		plt.savefig(self.data_path + "/g0_produced.pdf", bbox_inches='tight')
+		#"""
+
 		return g0
 
 	def calculate_Sigma(self, w, g0, gamma, M_L, M_C):
@@ -170,6 +203,17 @@ class PhononTransport:
 		gamma_prime = gamma_hb / np.sqrt(M_C * M_L)
 
 		g = g0 / (1 + gamma_prime * g0)
+		#"""
+		self.g = g
+		fig, ax1 = plt.subplots()
+		ax1.plot(self.E, np.imag(g), color="red", label="Im(g0)")
+		ax1.plot(self.E, np.real(g), color="green", label="Re(g0)")
+		#ax1.set_ylim(-1E1,10)
+		plt.grid()
+		plt.legend()
+		plt.show()
+		plt.savefig(self.data_path + "/g_produced.pdf", bbox_inches='tight')
+		#"""
 		sigma_nu = gamma_prime ** 2 * g
 
 		return sigma_nu
@@ -201,49 +245,49 @@ class PhononTransport:
 		D = self.D
 		D = copy.copy(D)
 
-		n_atoms = int(D.shape[0] / 3)
+		n_atoms = int(D.shape[0] / self.dimension)
 
 		# set up self energies
-		sigma_L = np.zeros((n_atoms * 3, n_atoms * 3), complex)
-		sigma_R = np.zeros((n_atoms * 3, n_atoms * 3), complex)
+		sigma_L = np.zeros((n_atoms * self.dimension, n_atoms * self.dimension), complex)
+		sigma_R = np.zeros((n_atoms * self.dimension, n_atoms * self.dimension), complex)
 		if (in_plane == True):
 			lower = 2
 		else:
 			lower = 0
 
 		for n_l_ in n_l:
-			for u in range(lower, 3):
-				sigma_L[n_l_ * 3 + u, n_l_ * 3 + u] = sigma[i]
+			for u in range(lower, self.dimension):
+				sigma_L[n_l_ * self.dimension + u, n_l_ * self.dimension + u] = sigma[i]
 		for n_r_ in n_r:
-			for u in range(lower, 3):
-				sigma_R[n_r_ * 3 + u, n_r_ * 3 + u] = sigma[i]
-		sigma_i = sigma[i]
+			for u in range(lower, self.dimension):
+				sigma_R[n_r_ * self.dimension + u, n_r_ * self.dimension + u] = sigma[i]
+
 
 		# correct momentum conservation
 		# convert to hartree/Bohr**2
 		gamma_hb = gamma * eV2hartree / ang2bohr ** 2
 
-		for u in range(lower, 3):
+		for u in range(lower, self.dimension):
 			for n_l_ in n_l:
 				# remove mass weighting
-				K_ = D[n_l_ * 3 + u][n_l_ * 3 + u] * top.atom_weight(M_C)
+				K_ = D[n_l_ * self.dimension + u][n_l_ * self.dimension + u] * top.atom_weight(self.M_C)
 				# correct momentum
 				K_ = K_ - gamma_hb
 				# add mass weighting again
-				D_ = K_ / top.atom_weight(M_C)
-				D[n_l_ * 3 + u][n_l_ * 3 + u] = D_
+				D_ = K_ / top.atom_weight(self.M_C)
+				D[n_l_ * self.dimension + u][n_l_ * self.dimension + u] = D_
 
 			for n_r_ in n_r:
 				# remove mass weighting
-				K_ = D[n_r_ * 3 + u][n_r_ * 3 + u] * top.atom_weight(M_C)
+				K_ = D[n_r_ * self.dimension + u][n_r_ * self.dimension + u] * top.atom_weight(self.M_C)
 				# correct momentum
 				K_ = K_ - gamma_hb
 				# add mass weighting again
-				D_ = K_ / top.atom_weight(M_C)
-				D[n_r_ * 3 + u][n_r_ * 3 + u] = D_
+				D_ = K_ / top.atom_weight(self.M_C)
+				D[n_r_ * self.dimension + u][n_r_ * self.dimension + u] = D_
 
 		# calculate greens function
-		G = np.linalg.inv(w[i] ** 2 * np.identity(3 * n_atoms) - D - sigma_L - sigma_R)
+		G = np.linalg.inv(self.w[i] ** 2 * np.identity(self.dimension * n_atoms) - D - sigma_L - sigma_R)
 		return G
 
 	def calculate_T(self):
@@ -345,22 +389,22 @@ class PhononTransport:
 		D = self.D
 		D = copy.copy(D)
 
-		n_atoms = int(D.shape[0] / 3)
+		n_atoms = int(D.shape[0] / self.dimension)
 
 		# set up self energies
-		sigma_L = np.zeros((n_atoms * 3, n_atoms * 3), complex)
-		sigma_R = np.zeros((n_atoms * 3, n_atoms * 3), complex)
+		sigma_L = np.zeros((n_atoms * self.dimension, n_atoms * self.dimension), complex)
+		sigma_R = np.zeros((n_atoms * self.dimension, n_atoms * self.dimension), complex)
 		if (in_plane == True):
 			lower = 2
 		else:
 			lower = 0
 
 		for n_l_ in n_l:
-			for u in range(lower, 3):
-				sigma_L[n_l_ * 3 + u, n_l_ * 3 + u] = sigma[i]
+			for u in range(lower, self.dimension):
+				sigma_L[n_l_ * self.dimension + u, n_l_ * self.dimension + u] = sigma[i]
 		for n_r_ in n_r:
-			for u in range(lower, 3):
-				sigma_R[n_r_ * 3 + u, n_r_ * 3 + u] = sigma[i]
+			for u in range(lower, self.dimension):
+				sigma_R[n_r_ * self.dimension + u, n_r_ * self.dimension + u] = sigma[i]
 
 		Gamma_L = -2 * np.imag(sigma_L)
 		Gamma_R = -2 * np.imag(sigma_R)
@@ -378,7 +422,7 @@ class PhononTransport:
 
 		"""
 		#convert
-		w = E / (np.sqrt(9.375821464623672e+29) * h_bar / (1.60217656535E-22))
+		w = E / (unit2SI * h_bar / (meV2J))
 		#find index
 		index = np.argmin(np.abs(w-self.w))
 		#prepare and calculate
@@ -400,7 +444,7 @@ class PhononTransport:
 		Returns: T, T_vals: Total transmission, Contribution of each channel (up to channel_max)
 
 		"""
-		energy = np.round(self.w[i] * np.sqrt(9.375821464623672e+29) * h_bar / (1.60217656535E-22), 3)
+		energy = np.round(self.w[i] * unit2SI * h_bar / (meV2J), 3)
 		trans_prob_matrix = self.calc_trans_prob_matrix_i(i)
 		eigenvalues, eigenvectors = np.linalg.eigh(trans_prob_matrix + 0*np.ones(trans_prob_matrix.shape) * (1.j * 1E-25))
 		# sort eigenvalues and eigenvecors
@@ -429,7 +473,7 @@ class PhononTransport:
 			if (os.path.exists(self.data_path + "/eigenchannels") == False):
 				os.mkdir(f"{self.data_path}/eigenchannels")
 			eu.write_nmd_file(f"{self.data_path}/eigenchannels/eigenchannel_{energy}.nmd", self.coord, displacement_matrix,
-							  channel_max)
+							  channel_max, self.dimension)
 
 		# calculate Transmission
 		T = np.sum(eigenvalues)
@@ -439,7 +483,7 @@ class PhononTransport:
 	def calc_kappa(self):
 		kappa = list()
 		# w to SI
-		w_kappa = self.w * np.sqrt(9.375821464623672e+29)
+		w_kappa = self.w * unit2SI
 		E = h_bar * w_kappa
 		# joule to hartree
 		E = E / har2J
@@ -456,7 +500,7 @@ class PhononTransport:
 		ax.set_yscale('log')
 		ax.set_xlabel('Phonon Energy ($\mathrm{meV}$)', fontsize=12)
 		ax.set_ylabel(r'Transmission $\tau_{\mathrm{ph}}$', fontsize=12)
-		ax.axvline(self.w_D * np.sqrt(9.375821464623672e+29) * h_bar / (1.60217656535E-22), ls="--", color="black")
+		ax.axvline(self.w_D * unit2SI * h_bar / (meV2J), ls="--", color="black")
 		ax.axhline(1, ls="--", color="black")
 		ax.set_ylim(1E-4, 2)
 		plt.rc('xtick', labelsize=12)
@@ -468,12 +512,23 @@ class PhononTransport:
 		fig, (ax1, ax2) = plt.subplots(2, 1)
 		fig.tight_layout()
 		ax1.plot(self.E, self.T)
-		ax1.set_yscale('log')
+		#ax1.set_yscale('log')
 		ax1.set_xlabel('Phonon Energy ($\mathrm{meV}$)', fontsize=12)
 		ax1.set_ylabel(r'Transmission $\tau_{\mathrm{ph}}$', fontsize=12)
-		ax1.axvline(self.w_D * np.sqrt(9.375821464623672e+29) * h_bar / (1.60217656535E-22), ls="--", color="black")
+		ax1.axvline(self.w_D * unit2SI * h_bar / (meV2J), ls="--", color="black")
 		ax1.axhline(1, ls="--", color="black")
-		ax1.set_ylim(10E-5, 2)
+		ax1.set_ylim(0, 1)
+		ax1.set_xlim(0, self.E_D)
+		ax1.grid()
+		""""
+		#analytic solution
+		E = self.w
+		self.k_c = -self.gamma*(eV2hartree / ang2bohr ** 2)
+		self.g0 = 1/(2*self.k_x*E)*(E-np.sqrt(E**2-4*self.k_x, dtype=complex))
+		self.g = 0.5*(E**2-2*self.k_c-E*np.sqrt(E**2-4*self.k_x,dtype=complex))/(E**2*(self.k_x-self.k_c)+self.k_c**2)
+		transp = 4*self.k_c**4*np.imag(self.g)**2/((E**2-2*self.k_c-2*self.k_c**2*np.real(self.g))**2 + 4*self.k_c**4*np.imag(self.g)**2)
+		ax1.plot(self.E, transp, lw=4, alpha = 0.5)
+		"""
 
 		ax2.plot(self.temperature, self.kappa)
 		ax2.set_xlabel('Temperature ($K$)', fontsize=12)
@@ -481,8 +536,8 @@ class PhononTransport:
 		plt.rc('xtick', labelsize=12)
 		plt.rc('ytick', labelsize=12)
 		plt.savefig(data_path + "/transport.pdf", bbox_inches='tight')
-
 		plt.clf()
+
 
 	def tranport_calc(self):
 		self.calculate_G_cc()

@@ -69,7 +69,7 @@ def write_g98_file(filename, coord, displacement_matrix):
         f.write("   " + str(atom) + "  " + str(AN) + "     " + str(x_1) + "   "  + str(y_1) + "   " + str(z_1) + "     " + str(x_2) + "   "  + str(y_2) + "   " + str(z_2) + "     "+ str(x_3) + "   "  + str(y_3) + "   " + str(z_3) + "\n")
     f.close()
 
-def write_nmd_file(filename, coord, displacement_matrix, n_channel_max, use_mass_scaling=True):
+def write_nmd_file(filename, coord, displacement_matrix, n_channel_max, use_mass_scaling=True, dimensions=3):
 
     bohr2ang = 0.529177249
     digits = 6
@@ -97,7 +97,7 @@ def write_nmd_file(filename, coord, displacement_matrix, n_channel_max, use_mass
         mode_string=""
         for j in range(0,displacement_matrix.shape[0]):
             displacement = displacement_matrix[j,i]
-            displacement = displacement * mass_scaling[int(j/3)]
+            displacement = displacement * mass_scaling[int(j/dimensions)]
             mode_string = mode_string + " " + str(displacement)
         modes.append(mode_string)
 
