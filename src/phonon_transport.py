@@ -21,6 +21,7 @@ import configparser
 from optparse import OptionParser
 import calculate_kappa as ck
 from utils import eigenchannel_utils as eu
+import electrode as el
 
 
 # h_bar in Js
@@ -83,7 +84,11 @@ class PhononTransport:
 		self.w = np.linspace(0, self.w_D * 1.1, N)
 		self.E = self.w * unit2SI * h_bar * J2meV
 		self.i = np.linspace(0, self.N, self.N, False, dtype=int)
-		self.g0 = self.calculate_g0(self.w, self.w_D)
+
+		electrode = el.Chain1D(self.w, sys.argv[1])
+		#self.g0 = self.calculate_g0(self.w, self.w_D)
+		self.g0 = electrode.g0
+
 		self.Sigma = self.calculate_Sigma(self.w, self.g0, gamma, self.M_L, self.M_C)
 		# set up dynamical matrix K
 		self.D = top.create_dynamical_matrix(filename_hessian, self.coord_path, t2SI=False, dimensions=self.dimension)
@@ -576,7 +581,7 @@ if __name__ == '__main__':
 		filename_hessian = data_path + "/" + hessian_name
 		filename_coord = data_path + "/" + coord_name
 
-		# atoms which are coupled to the leads -> self energy
+		# atoms which are coupled to the electrodes -> self energy
 		n_l = np.asarray(str(cfg.get('Calculation', 'n_l')).split(','), dtype=int)
 		n_r = np.asarray(str(cfg.get('Calculation', 'n_r')).split(','), dtype=int)
 

@@ -18,6 +18,8 @@ T_min=0.1
 T_max=400
 kappa_grid_points=1000
 
+[Electrode]
+
 [Eigenchannel]
 eigenchannel=True
 every_nth=1 (for all, -1 for none)
