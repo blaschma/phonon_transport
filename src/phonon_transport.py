@@ -10,8 +10,8 @@ import sys
 import json
 
 import numpy as np
-from scipy.linalg import eig
 import matplotlib
+from model_systems import Chain1D
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -22,6 +22,7 @@ from optparse import OptionParser
 import calculate_kappa as ck
 from utils import eigenchannel_utils as eu
 import electrode as el
+from utils import constants
 
 
 # h_bar in Js
@@ -56,6 +57,9 @@ class PhononTransport:
 		self.coord_path = coord_path
 		self.n_l = n_l
 		self.n_r = n_r
+		#pfusch
+		N_chain = 2
+		self.n_r =[N_chain-1]
 		self.gamma = gamma
 		self.in_plane = in_plane
 		self.eigenchannel = eigenchannel
@@ -78,20 +82,26 @@ class PhononTransport:
 
 		# pfusch!!
 		self.dimension = 1
-		self.k_x = 0.1*(eV2hartree / ang2bohr ** 2)
+
 
 
 		self.w = np.linspace(0, self.w_D * 1.1, N)
+		self.w = self.w + 1.j*1E-12
 		self.E = self.w * unit2SI * h_bar * J2meV
 		self.i = np.linspace(0, self.N, self.N, False, dtype=int)
 
-		electrode = el.Chain1D(self.w, sys.argv[1])
-		#self.g0 = self.calculate_g0(self.w, self.w_D)
-		self.g0 = electrode.g0
+		#self.electrode = el.Chain1D(self.w, sys.argv[1])
+		#self.g0 = self.electrode.g0
+		#print(self.g0)
+
+		self.electrode = el.Square2d(self.w, sys.argv[1])
+		self.g0 = self.electrode.g0
+
 
 		self.Sigma = self.calculate_Sigma(self.w, self.g0, gamma, self.M_L, self.M_C)
 		# set up dynamical matrix K
-		self.D = top.create_dynamical_matrix(filename_hessian, self.coord_path, t2SI=False, dimensions=self.dimension)
+		#self.D = top.create_dynamical_matrix(filename_hessian, self.coord_path, t2SI=False, dimensions=self.dimension)
+		self.D = Chain1D(0.1*(constants.eV2hartree / constants.ang2bohr ** 2), N_chain).hessian
 		self.coord = top.read_coord_file(self.coord_path)
 
 		self._G_cc = np.ones((N,self.D.shape[0], self.D.shape[1]), dtype=complex)
@@ -145,45 +155,6 @@ class PhononTransport:
 	def trans_prob_matrix(self, trans_prob_matrix):
 		self._trans_prob_matrix = trans_prob_matrix
 
-	def calculate_g0(self, w, w_D):
-		"""Calculates surface greens function according to Markussen, T. (2013). Phonon interference effects in molecular junctions. The Journal of chemical physics, 139(24), 244101 (https://doi.org/10.1063/1.4849178).
-
-		Args:
-		w (array_like): Frequency where g0 is calculated
-		w_D (float): Debeye frequency
-
-		Returns:
-		g0	(array_like) Surface greens function g0
-		"""
-		# pfusch!!
-		if(False):
-			def im_g(w):
-				if (w <= w_D):
-					Im_g = -np.pi * 3.0 * w / (2 * w_D ** 3)
-				else:
-					Im_g = 0
-				return Im_g
-
-			Im_g = map(im_g, w)
-			Im_g = np.asarray(list(Im_g))
-			Re_g = -np.asarray(np.imag(scipy.signal.hilbert(Im_g)))
-			g0 = np.asarray((Re_g + 1.j * Im_g), complex)
-		else:
-			g0 = 1/(2*self.k_x*w)*(w-np.sqrt(w**2-4*self.k_x, dtype=complex))
-
-
-		fig, ax1 = plt.subplots()
-		#"""
-		ax1.plot(w, np.imag(g0), color="red", label="Im(g0)")
-		ax1.plot(w, np.real(g0), color="green", label="Re(g0)")
-		ax1.set_ylim(-12000,8000)
-		plt.grid()
-		plt.legend()
-		plt.show()
-		plt.savefig(self.data_path + "/g0_produced.pdf", bbox_inches='tight')
-		#"""
-
-		return g0
 
 	def calculate_Sigma(self, w, g0, gamma, M_L, M_C):
 		"""Calculates self energy according to Markussen, T. (2013). Phonon interference effects in molecular junctions. The Journal of chemical physics, 139(24), 244101  (https://doi.org/10.1063/1.4849178).
@@ -210,9 +181,13 @@ class PhononTransport:
 		g = g0 / (1 + gamma_prime * g0)
 		#"""
 		self.g = g
+		print(g)
+		#pfusch
+		g = self.electrode.g
+		print(g)
 		fig, ax1 = plt.subplots()
-		ax1.plot(self.E, np.imag(g), color="red", label="Im(g0)")
-		ax1.plot(self.E, np.real(g), color="green", label="Re(g0)")
+		ax1.plot(self.E, np.imag(g)*gamma_hb, color="red", label="Im(g0)")
+		ax1.plot(self.E, np.real(g)*gamma_hb, color="green", label="Re(g0)")
 		#ax1.set_ylim(-1E1,10)
 		plt.grid()
 		plt.legend()
@@ -514,6 +489,7 @@ class PhononTransport:
 		plt.savefig(self.data_path + "/transport_channels.pdf", bbox_inches='tight')
 
 	def plot_transport(self):
+		print(self.T)
 		fig, (ax1, ax2) = plt.subplots(2, 1)
 		fig.tight_layout()
 		ax1.plot(self.E, self.T)
@@ -522,18 +498,15 @@ class PhononTransport:
 		ax1.set_ylabel(r'Transmission $\tau_{\mathrm{ph}}$', fontsize=12)
 		ax1.axvline(self.w_D * unit2SI * h_bar / (meV2J), ls="--", color="black")
 		ax1.axhline(1, ls="--", color="black")
-		ax1.set_ylim(0, 1)
+		ax1.set_ylim(0, 1.5)
 		ax1.set_xlim(0, self.E_D)
 		ax1.grid()
-		""""
+		#""""
 		#analytic solution
-		E = self.w
-		self.k_c = -self.gamma*(eV2hartree / ang2bohr ** 2)
-		self.g0 = 1/(2*self.k_x*E)*(E-np.sqrt(E**2-4*self.k_x, dtype=complex))
-		self.g = 0.5*(E**2-2*self.k_c-E*np.sqrt(E**2-4*self.k_x,dtype=complex))/(E**2*(self.k_x-self.k_c)+self.k_c**2)
-		transp = 4*self.k_c**4*np.imag(self.g)**2/((E**2-2*self.k_c-2*self.k_c**2*np.real(self.g))**2 + 4*self.k_c**4*np.imag(self.g)**2)
+		k_c  = -self.gamma * (eV2hartree / ang2bohr ** 2)
+		transp = 4*k_c**4*np.imag(self.g)**2/((self.w**2-2*k_c-2*k_c**2*np.real(self.g))**2 + 4*k_c**4*np.imag(self.g)**2)
 		ax1.plot(self.E, transp, lw=4, alpha = 0.5)
-		"""
+		#"""
 
 		ax2.plot(self.temperature, self.kappa)
 		ax2.set_xlabel('Temperature ($K$)', fontsize=12)

@@ -12,3 +12,9 @@ J2meV = 6.24150934190e+21
 meV2J = 1.60217656535E-22
 #This unit is calulated from the greens function: w**2 and D have to have the same unit
 unit2SI = np.sqrt(9.375821464623672e+29)
+
+if __name__ == '__main__':
+    unit = np.sqrt((1/har2J)/((1/bohr2m)**2*(1/u2kg)))
+    print(1/unit)
+    print(unit2SI)
+    print(2*np.sqrt(0.002 * (eV2hartree / ang2bohr ** 2) * 1E-2))
