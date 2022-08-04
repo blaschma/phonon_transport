@@ -58,7 +58,7 @@ class PhononTransport:
 		self.n_l = n_l
 		self.n_r = n_r
 		#pfusch
-		N_chain = 2
+		N_chain = 1
 		self.n_r =[N_chain-1]
 		self.gamma = gamma
 		self.in_plane = in_plane
@@ -89,13 +89,22 @@ class PhononTransport:
 		self.w = self.w + 1.j*1E-12
 		self.E = self.w * unit2SI * h_bar * J2meV
 		self.i = np.linspace(0, self.N, self.N, False, dtype=int)
-
+		print("setting up electrode")
 		#self.electrode = el.Chain1D(self.w, sys.argv[1])
 		#self.g0 = self.electrode.g0
-		#print(self.g0)
 
-		self.electrode = el.Square2d(self.w, sys.argv[1])
+		#self.electrode = el.Square2d(self.w, sys.argv[1])
+		#self.g0 = self.electrode.g0
+
+		#self.electrode = el.Lattice3d(self.w, sys.argv[1])
+		#self.g0 = self.electrode.g0
+
+		self.electrode = el.Ribbon2D(self.w, sys.argv[1])
 		self.g0 = self.electrode.g0
+		self.g = self.electrode.g
+		self.electrode.plot_g()
+
+		print("electrode done")
 
 
 		self.Sigma = self.calculate_Sigma(self.w, self.g0, gamma, self.M_L, self.M_C)
@@ -178,13 +187,10 @@ class PhononTransport:
 
 		gamma_prime = gamma_hb / np.sqrt(M_C * M_L)
 
-		g = g0 / (1 + gamma_prime * g0)
-		#"""
-		self.g = g
-		print(g)
-		#pfusch
-		g = self.electrode.g
-		print(g)
+		g = self.g
+		print("transport", g)
+		#self.g = g
+
 		fig, ax1 = plt.subplots()
 		ax1.plot(self.E, np.imag(g)*gamma_hb, color="red", label="Im(g0)")
 		ax1.plot(self.E, np.real(g)*gamma_hb, color="green", label="Re(g0)")

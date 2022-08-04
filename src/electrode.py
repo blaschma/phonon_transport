@@ -4,8 +4,12 @@ from functools import partial
 
 import numpy as np
 import scipy
+import matplotlib
+#matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from scipy.integrate import quad
+from scipy.integrate import simps
+import ray
 
 from utils import constants
 
@@ -17,9 +21,61 @@ class Electrode():
         self.dimension = -1
         self.cfg = configparser.ConfigParser()
         self.cfg.read_file(codecs.open(config_path, "r", "utf8"))
+        self.data_path = str(self.cfg.get('Data Input', 'data_path'))
 
     def calcalculate_g0(self):
         return
+
+    def calculate_g(self, g_0):
+        """Calculates surface greens of 2d half infinite square lattic (nearest neighbor coupling)
+
+        Args:
+        g_0 (array_like): Uncoupled surface greens function
+
+        Returns:
+        g	(array_like) Surface greens function coupled by dyson equation
+        """
+
+        gamma_hb = -self.k_c
+        gamma_prime = gamma_hb
+        #g = np.dot(g_0, np.linalg.inv(np.identity(g_0.shape[0]) + np.dot(gamma_prime,g_0)))
+        g = g_0 / (1 + gamma_prime * g_0)
+
+
+        return g
+
+    def plot_g0(self):
+        fig, ax1 = plt.subplots()
+        # """
+        #print((np.imag(self.g0)))
+        ax1.plot(w * constants.unit2SI * constants.h_bar * constants.J2meV, np.imag(self.g0) * self.k_c, color="red", label="Im(g0)")
+        ax1.plot(w * constants.unit2SI * constants.h_bar * constants.J2meV, np.real(self.g0) * self.k_c, color="green", label="Re(g0)")
+        #ax1.set_yscale("log")
+        #ax1.set_ylim(-5, 5)
+        plt.xlabel("Energy (meV)")
+        plt.ylabel(r"g $(1/k_c)$")
+        plt.grid()
+        plt.legend()
+        plt.title(r"$g_0$")
+        plt.show()
+        plt.savefig(self.data_path + "/g0_2d.pdf", bbox_inches='tight')
+
+    def plot_g(self):
+        fig, ax1 = plt.subplots()
+        ax1.plot(self.w * constants.unit2SI * constants.h_bar * constants.J2meV, np.imag(self.g) * self.k_c, color="red", label="Im(g0)")
+        ax1.plot(self.w * constants.unit2SI * constants.h_bar * constants.J2meV, np.real(self.g) * self.k_c, color="green", label="Re(g0)")
+        #ax1.plot(np.imag(self.g) * self.k_c, color="red", label="Im(g0)")
+        #ax1.plot(np.real(self.g) * self.k_c, color="green", label="Re(g0)")
+        ax1.set_ylim(-1.5, 1.5)
+        #ax1.set_ylim(-50, 50)
+        plt.xlabel("Energy (meV)")
+        plt.ylabel(r"g $(1/k_c)$")
+        plt.grid()
+        plt.legend()
+        plt.title(r"$g_{\mathrm{surf}}}$")
+        plt.savefig(self.data_path + "/g_from_electrode.pdf", bbox_inches='tight')
+        plt.show()
+
 
 
 
@@ -68,17 +124,17 @@ class DebeyeModel(Electrode):
         self.w_D = w_D / constants.unit2SI
 
 
+
 class Chain1D(Electrode):
 
     def __init__(self, w, config_path):
         super().__init__(w, config_path)
-        #self.w = w + 1E-26 * 1.j
         #self.load_model_parameters()
         self.dimension = 1
         self.k = 0.1*(constants.eV2hartree / constants.ang2bohr ** 2)
         self.k_c = 0.1* (constants.eV2hartree / constants.ang2bohr ** 2)
         self.g0 = self.calculate_g0(self.w, self.k)
-        self.g = self.calcalculate_g(self.w)
+        self.g = self.calculate_g(self.g0)
 
     def calculate_g0(self, w, k):
         """Calculates surface greens of one-dimensional chain (nearest neighbor coupling) with coupling parameter k
@@ -92,50 +148,14 @@ class Chain1D(Electrode):
         """
 
         g_0 = 1/(2*k*w)*(w-np.sqrt(w**2-4*k, dtype=complex))
-        """
-        gamma_hb = -self.k_c
-        gamma_prime = gamma_hb
-        g_0 = g_0 / (1 + gamma_prime * g_0)
-        """
 
         return g_0
-
-
-    def calcalculate_g(self, w):
-        g = 0.5*(w**2-2*self.k_c-w*np.sqrt(w**2-4*self.k, dtype=complex))/(self.w**2*(self.k-self.k_c)+ self.k_c**2)
-        return g
 
     def load_model_parameters(self):
         self.k = float(self.cfg.get('Electrode', 'k'))
         assert self.k >= 0, "Due to the sign in the dyson equation, k must be negative"
 
-    def plot_g0(self):
-        fig, ax1 = plt.subplots()
-        # """
-        ax1.plot(w * constants.unit2SI * constants.h_bar * constants.J2meV, np.imag(self.g0)*self.k_c, color="red", label="Im(g0)")
-        ax1.plot(w * constants.unit2SI * constants.h_bar * constants.J2meV, np.real(self.g0)*self.k_c, color="green", label="Re(g0)")
-        #ax1.set_yscale("log")
-        #ax1.set_ylim(-100, 100)
-        plt.xlabel("Energy (meV)")
-        plt.ylabel(r"g $(1/k_c)$")
-        plt.grid()
-        plt.legend()
-        plt.show()
-        #plt.savefig(self.data_path + "/g0_1d.pdf", bbox_inches='tight')
 
-    def plot_g(self):
-        fig, ax1 = plt.subplots()
-        # """
-        ax1.plot(w * constants.unit2SI * constants.h_bar * constants.J2meV, np.imag(self.g)*self.k_c, color="red", label="Im(g0)")
-        ax1.plot(w * constants.unit2SI * constants.h_bar * constants.J2meV, np.real(self.g)*self.k_c, color="green", label="Re(g0)")
-        #ax1.set_yscale("log")
-        #ax1.set_ylim(-100, 100)
-        plt.xlabel("Energy (meV)")
-        plt.ylabel(r"g $(1/k_c)$")
-        plt.grid()
-        plt.legend()
-        plt.show()
-        #plt.savefig(self.data_path + "/g0_1d.pdf", bbox_inches='tight')
 
 class Square2d(Electrode):
 
@@ -144,12 +164,12 @@ class Square2d(Electrode):
         #self.w = w + 1E-32 * 1.j
         #self.load_model_parameters()
         self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
-        self.k_y = 0.002 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1E-12
+        self.k_y = 0.002 * (constants.eV2hartree / constants.ang2bohr ** 2)*0
         self.dimension = 1
-        self.N_q = 51101
+        self.N_q = 1000
         self.k_c = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
         self.g0 = self.calculate_g0(self.w)
-        self.g = self.calculate_g(self.w)
+        self.g = self.calculate_g(self.g0)
 
     def calculate_g0(self, w):
         """Calculates surface greens of 2d half infinite square lattice (nearest neighbor coupling)
@@ -181,16 +201,39 @@ class Square2d(Electrode):
             g_0_.append(item)
         g_0 = np.array(g_0_)
 
-        """
-        gamma_hb = -self.k_c
-        gamma_prime = gamma_hb
-        g_0 = g_0 / (1 + gamma_prime * g_0)
-        """
-
         return g_0
 
-    def calculate_g(self, w):
-        """Calculates surface greens of 2d half infinite square lattic (nearest neighbor coupling)
+
+    def load_model_parameters(self):
+        """
+        Loads model parameters from config file. Units are converted
+        Returns:
+
+        """
+        model = str(self.cfg.get('Electrode', 'model'))
+        assert model == "Square2d"
+        self.k_x = float(self.cfg.get('Electrode', 'k_x')) * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.k_y = float(self.cfg.get('Electrode', 'k_y')) * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.N_qy = float(self.cfg.get('Electrode', 'N_qy'))
+        self.gamma = float(self.cfg.get('Calculation', 'gamma'))
+
+class Lattice3d(Electrode):
+
+    def __init__(self, w, config_path):
+        super().__init__(w, config_path)
+
+        #self.load_model_parameters()
+        self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.k_z = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.dimension = 3
+        self.N_q = 800
+        self.k_c = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.g0 = self.calculate_g0(self.w)
+        self.g = self.calculate_g(self.g0)
+
+    def calculate_g0(self, w):
+        """Calculates surface greens of 3d half infinite square lattice (nearest neighbor coupling)
 
         Args:
         w (array_like): Frequency where g0 is calculated
@@ -200,72 +243,250 @@ class Square2d(Electrode):
         g0	(array_like) Surface greens function g0
         """
 
+        k_x = self.k_x
+        k_y = self.k_y
+        k_z = self.k_z
+        N_q = self.N_q
+        q_y = np.linspace(0, 2. * np.pi, N_q)
+        q_z = np.linspace(0, 2 * np.pi, N_q)
+        ray.init()
 
-        q = np.linspace(-np.pi,np.pi, self.N_q)
-        #q = np.linspace(0, 2*np.pi, N_q)
+        #@ray.remote
         def g0_w(w):
-            #y = k_y * np.sin(q*a/2)**2
-            y = self.k_y * np.sin(q) ** 2
+            def integrand(w, q_y, q_z):
+                y = k_y * np.sin(q_y) ** 2 + k_z * np.sin(q_z) ** 2
+                w = np.real(w)
+                g0_q = 2 * ((w ** 2 - 4 * y) + np.sqrt((w ** 2 - 4 * y) * (w ** 2 - 4 * k_x - 4 * y),
+                                                       dtype=complex)) ** (-1)
+                return g0_q
 
-            #python cannot square complex numbers properly
-            w = np.real(w)
-            g0_q = 2 * ((w**2-4*y)-np.sqrt((w**2-4*y)*(w**2-4*y-4*self.k_x), dtype = complex))/((w**2-4*y)*4*self.k_x)
+            tmp = integrand(w, q_y.reshape(-1, 1), q_z.reshape(1, -1))
+            g0_ = 1 / ((2 * np.pi) ** 2) * simps([simps(zz_y, q_y) for zz_y in tmp], q_z)
 
+            return g0_
+        """
+        def worker(f, list):
+            return [f.remote(x) for x in list]
 
-            g0 = 1 / ((2 * np.pi)) * np.trapz(g0_q, q)
-            return g0
+        keine_ahnung = worker(g0_w, w)
+        results = ray.get(keine_ahnung)
+        """
+        #"""
+        g_0 = map(g0_w, w)
 
         g_0 = map(g0_w, w)
         g_0_ = list()
         for item in g_0:
             g_0_.append(item)
         g_0 = np.array(g_0_)
-
-
-        gamma_hb = -self.k_c
-        gamma_prime = gamma_hb
-        g_0 = g_0 / (1 + gamma_prime * g_0)
-
-
+        #"""
+        #print("donnnee")
+        #print(results)
+        #g_0 = np.array(results,dtype=complex)
+        #print("donnnee")
+        #print(results)
         return g_0
 
-    def plot_g0(self):
-        fig, ax1 = plt.subplots()
-        # """
-        ax1.plot(w* constants.unit2SI * constants.h_bar * constants.J2meV, np.imag(self.g0)*self.k_c, color="red", label="Im(g0)")
-        ax1.plot(w* constants.unit2SI * constants.h_bar * constants.J2meV, np.real(self.g0)*self.k_c, color="green", label="Re(g0)")
-        #ax1.set_yscale("log")
-        #ax1.set_ylim(-5, 5)
-        plt.xlabel("Energy (meV)")
-        plt.ylabel(r"g $(1/k_c)$")
-        plt.grid()
-        plt.legend()
-        plt.show()
-        plt.savefig(self.data_path + "/g0_2d.pdf", bbox_inches='tight')
-
-    def plot_g(self):
-        fig, ax1 = plt.subplots()
-        # """
-        ax1.plot(w* constants.unit2SI * constants.h_bar * constants.J2meV, np.imag(self.g)*self.k_c, color="red", label="Im(g0)")
-        ax1.plot(w* constants.unit2SI * constants.h_bar * constants.J2meV, np.real(self.g)*self.k_c, color="green", label="Re(g0)")
-        #ax1.set_yscale("log")
-        #ax1.set_ylim(-5, 5)
-        plt.xlabel("Energy (meV)")
-        plt.ylabel(r"g $(1/k_c)$")
-        plt.grid()
-        plt.legend()
-        plt.show()
-        #plt.savefig(self.data_path + "/g0_2d.pdf", bbox_inches='tight')
 
     def load_model_parameters(self):
-        self.k = float(self.cfg.get('Electrode', 'k'))
-        assert self.k >= 0, "Due to the sign in the dyson equation, k must be negative"
+        """
+        Loads model parameters from config file. Units are converted
+        Returns:
 
+        """
+
+        model = str(self.cfg.get('Electrode', 'model'))
+        assert model == "Lattice3d"
+        self.k_x = float(self.cfg.get('Electrode', 'k_x'))* (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.k_y = float(self.cfg.get('Electrode', 'k_y'))* (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.k_z = float(self.cfg.get('Electrode', 'k_z'))* (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.N_qy = float(self.cfg.get('Electrode', 'N_qy'))
+        self.N_qz = float(self.cfg.get('Electrode', 'N_qy'))
+        self.k_c = float(self.cfg.get('Calculation', 'gamma'))
+
+class Ribbon2D(Electrode):
+
+    def __init__(self, w, config_path):
+        super().__init__(w, config_path)
+        self.N_y = 5
+        self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
+        self.k_c = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.eps = 1E-50
+        self.g0 = self.calculate_g0(w)
+        self.g = self.calculate_g(self.g0)
+
+    def calculate_g0(self, w):
+        """Calculates surface greens 2d half infinite square lattice with finite width N_y. The greens function is
+        calculated using the procedure from Guinea, F., et al. "Effective two-dimensional Hamiltonian at surfaces."
+        Physical Review B 28.8 (1983): 4397.
+
+        Args:
+        w (array_like): Frequency where g0 is calculated
+
+        Returns:
+        g0	(array_like) Surface greens function g0
+        """
+
+        def build_H_NN():
+            H_NN = np.zeros((self.N_y,self.N_y), dtype=float)
+            for i in range(0, self.N_y):
+                # offdiagonals
+                if (i < self.N_y - 1):
+                    H_NN[i, i + 1] = -self.k_y
+                if (i > 0):
+                    H_NN[i, i - 1] = -self.k_y
+                # diagonals
+                H_NN[i, i] = -np.sum(H_NN[i, :]) + 2*self.k_x
+            return  H_NN
+        def build_H_00():
+            H_00 = build_H_NN()
+            H_00[0,0] -= self.k_x
+            if (self.N_y > 1 ):
+                H_00[self.N_y-1, self.N_y-1] -= self.k_x
+            return H_00
+        def build_H_01():
+            H_01 = np.identity(self.N_y) * (-self.k_x)
+            return H_01
+
+        def build_H_NN_spacial():
+            H_NN = np.zeros((2*self.N_y, 2*self.N_y), dtype=float)
+            for i in range(0,H_NN.shape[0]):
+                # x components
+                if(i%2 == 0):
+                    H_NN[i,i] = 2*self.k_x
+                # y components
+                else:
+                    # offdiagonals
+                    if (i < 2*self.N_y - 1):
+                        H_NN[i, i + 2] = -self.k_y
+                    if (i > 1):
+                        H_NN[i, i - 2] = -self.k_y
+                    # diagonals
+                    H_NN[i, i] = -np.sum(H_NN[i, 1::2])
+            return H_NN
+        def build_H_00_spacial():
+            H_00 = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
+            for i in range(0, H_00.shape[0]):
+                # x components
+                if (i % 2 == 0):
+                    H_00[i, i] = self.k_x
+                # y components
+                else:
+                    # offdiagonals
+                    if (i < 2 * self.N_y - 1):
+                        H_00[i, i + 2] = -self.k_y
+                    if (i > 1):
+                        H_00[i, i - 2] = -self.k_y
+                    # diagonals
+                    H_00[i, i] = -np.sum(H_00[i, 1::2])
+            return H_00
+
+        def build_H_01_spacial():
+            H_01 = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
+            for i in range(0, H_01.shape[0]):
+                #x components
+                if(i%2==0):
+                    #H_01[i,i+2] = -self.k_x
+                    H_01[i, i] = -self.k_x
+                if (i > 1):
+                    #H_01[i, i - 2] = -self.k_y
+                    pass
+            return H_01
+
+
+        #H_NN = build_H_NN()
+        #H_00 = build_H_00()
+        #H_01 = build_H_01()
+
+        H_NN = build_H_NN_spacial()
+        H_00 = build_H_00_spacial()
+        H_01 = build_H_01_spacial()
+
+        H_01_dagger = np.transpose(np.conj(H_01))
+
+        def calc_g0_w(w):
+            w = np.identity(H_NN.shape[0]) * (w **2 +(1.j*1E-12))
+            g = np.linalg.inv(w-H_NN)
+            alpha_i = np.dot(np.dot(H_01, g), H_01)
+            beta_i = np.dot(np.dot(H_01_dagger, g), H_01_dagger)
+            epsilon_is = H_00 + np.dot(np.dot(H_01,g),H_01_dagger)
+            epsilon_i = H_NN + np.dot(np.dot(H_01,g),H_01_dagger) + np.dot(np.dot(H_01_dagger,g),H_01)
+            delta = np.abs(2*np.trace(alpha_i))
+            deltas = list()
+            deltas.append(delta)
+            counter = 0
+            terminated = False
+            while(delta>self.eps):
+                counter +=1
+                if(counter > 10000):
+                    terminated = True
+                    break
+                g = np.linalg.inv(w-epsilon_i)
+                epsilon_i = epsilon_i + np.dot(np.dot(alpha_i, g), beta_i) + np.dot(np.dot(beta_i, g), alpha_i)
+                epsilon_is = epsilon_is + np.dot(np.dot(alpha_i, g), beta_i)
+                alpha_i = np.dot(np.dot(alpha_i, g), alpha_i)
+                beta_i = np.dot(np.dot(beta_i, g), beta_i)
+                delta = np.abs(2*np.trace(alpha_i))
+                deltas.append(delta)
+            if(delta>=self.eps or terminated):
+                print("warning")
+
+            g_0 = np.linalg.inv(w-epsilon_is)
+            #return np.trace(g_0[int(H_NN.shape[0]/2):int(H_NN.shape[0]/2)+2,int(H_NN.shape[0]/2):int(H_NN.shape[0]/2)+2])
+            #return (g_0[int(H_NN.shape[0] / 2)-1, int(H_NN.shape[0] / 2)-1])
+            #return (g_0[0, 0])
+            return g_0
+
+        """
+        for i in range(100, 101):
+            g0 = calc_g0_w(w[i])
+            #print(g0)
+            #print(g0.shape)
+        """
+        #return
+        #"""
+        g_0 = map(calc_g0_w, w)
+        g_0_ = list()
+        for item in g_0:
+            g_0_.append(item)
+            #print(item[int(item.shape[0]/2)-1:int(item.shape[0]/2)+1,int(item.shape[0]/2)-1:int(item.shape[0]/2)+1]*self.k_c)
+            #print("-")
+        g_0 = np.array(g_0_)
+        return  g_0
+        #"""
+
+    def calculate_g(self, g_0):
+        """Calculates surface greens of 2d half infinite square lattic (nearest neighbor coupling)
+
+        Args:
+        g_0 (array_like): Uncoupled surface greens function
+
+        Returns:
+        g	(array_like) Surface greens function coupled by dyson equation
+        """
+        def worker(g_0):
+            gamma_hb = -self.k_c*np.identity(g_0.shape[0])
+            #gamma_hb = np.zeros(g_0.shape)
+            gamma_hb[int(g_0.shape[0] / 2) - 1, int(g_0.shape[0] / 2) - 1] = -self.k_c
+
+            gamma_prime = gamma_hb
+            #dyson equation
+            g = np.dot(g_0, np.linalg.inv(np.identity(g_0.shape[0]) + np.dot(gamma_prime , g_0)))
+
+            return g[int(g_0.shape[0] / 2)-1, int(g_0.shape[0] / 2)-1]
+
+        g = map(worker, g_0)
+        g_ = list()
+        for item in g:
+            g_.append(item)
+        g = np.array(g_)
+        return g
 
 if __name__ == '__main__':
 
-    N = 2000
-    E_D = 50
+    N = 500
+    E_D = 30
     config_path = "../../1D_test/phonon_config"
     # convert to J
     E_D = E_D * constants.meV2J
@@ -273,19 +494,26 @@ if __name__ == '__main__':
     w_D = E_D / constants.h_bar
     # convert to har*s/(bohr**2*u)
     w_D = w_D / constants.unit2SI
-    w = np.linspace(0, w_D * 1.1, N)
+    w = np.linspace(w_D*1E-12, w_D * 1.1, N)
 
-    #"""
-    #w = w + 1E-3*1.j
-    #w = w + 1.j * 1E-128
-    electrode = Square2d(w, config_path)
-    #electrode.plot_g0()
-    electrode.plot_g()
-    #"""
-
-    #"""
-    #w = w + 1E-12 * 1.j
+    """
     electrode = Chain1D(w, config_path)
+    electrode.plot_g0()
+    electrode.plot_g()
+    """
+
+    """
+    electrode = Square2d(w, config_path)
+    electrode.plot_g0()
+    electrode.plot_g()
+    """
+
+    """
+    electrode = Lattice3d(w, config_path)
+    electrode.plot_g0()
+    electrode.plot_g()
+    """
+
+    electrode = Ribbon2D(w, config_path)
     #electrode.plot_g0()
     electrode.plot_g()
-    #"""

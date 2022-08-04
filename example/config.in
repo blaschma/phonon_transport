@@ -19,6 +19,13 @@ T_max=400
 kappa_grid_points=1000
 
 [Electrode]
+model = Lattice3d
+k_x = #Coupling constant [eV] of electrode in transport direction
+k_y = #Coupling constant [eV] of electrode parallel to transport direction
+k_z = #Coupling constant [eV] of electrode parallel to transport direction
+N_qy = q-points in y direction
+N_qz = q-points in z direction
+
 
 [Eigenchannel]
 eigenchannel=True
