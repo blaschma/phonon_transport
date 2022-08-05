@@ -279,12 +279,7 @@ class Lattice3d(Electrode):
         for item in g_0:
             g_0_.append(item)
         g_0 = np.array(g_0_)
-        #"""
-        #print("donnnee")
-        #print(results)
-        #g_0 = np.array(results,dtype=complex)
-        #print("donnnee")
-        #print(results)
+
         return g_0
 
 
@@ -308,8 +303,8 @@ class Ribbon2D(Electrode):
 
     def __init__(self, w, config_path):
         super().__init__(w, config_path)
-        self.N_y = 5
-        self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.N_y = 3
+        self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 0
         self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
         self.k_c = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
         self.eps = 1E-50
@@ -438,20 +433,11 @@ class Ribbon2D(Electrode):
             #return (g_0[0, 0])
             return g_0
 
-        """
-        for i in range(100, 101):
-            g0 = calc_g0_w(w[i])
-            #print(g0)
-            #print(g0.shape)
-        """
-        #return
-        #"""
         g_0 = map(calc_g0_w, w)
         g_0_ = list()
         for item in g_0:
             g_0_.append(item)
-            #print(item[int(item.shape[0]/2)-1:int(item.shape[0]/2)+1,int(item.shape[0]/2)-1:int(item.shape[0]/2)+1]*self.k_c)
-            #print("-")
+
         g_0 = np.array(g_0_)
         return  g_0
         #"""
@@ -465,16 +451,20 @@ class Ribbon2D(Electrode):
         Returns:
         g	(array_like) Surface greens function coupled by dyson equation
         """
-        def worker(g_0):
-            gamma_hb = -self.k_c*np.identity(g_0.shape[0])
-            #gamma_hb = np.zeros(g_0.shape)
-            gamma_hb[int(g_0.shape[0] / 2) - 1, int(g_0.shape[0] / 2) - 1] = -self.k_c
+        gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
+        for i in range(0, gamma_hb.shape[0]):
+            if(i%2==1):
+                #gamma_hb[i,i] = 0
+                pass
 
+        def worker(g_0):
             gamma_prime = gamma_hb
             #dyson equation
             g = np.dot(g_0, np.linalg.inv(np.identity(g_0.shape[0]) + np.dot(gamma_prime , g_0)))
 
-            return g[int(g_0.shape[0] / 2)-1, int(g_0.shape[0] / 2)-1]
+            #return g[int(g_0.shape[0] / 2)-1, int(g_0.shape[0] / 2)-1]
+            #return g[int(g_0.shape[0] / 2), int(g_0.shape[0] / 2)]
+            return g
 
         g = map(worker, g_0)
         g_ = list()

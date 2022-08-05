@@ -11,7 +11,7 @@ import json
 
 import numpy as np
 import matplotlib
-from model_systems import Chain1D
+from model_systems import Chain1D, FiniteLattice2D
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -80,18 +80,14 @@ class PhononTransport:
 		self.w_D = w_D / unit2SI
 		self.temperature = np.linspace(T_min, T_max, kappa_grid_points)
 
-		# pfusch!!
-		self.dimension = 1
-
-
-
-		self.w = np.linspace(0, self.w_D * 1.1, N)
+		self.w = np.linspace(0.01*self.w_D, self.w_D * 1.1, N)
 		self.w = self.w + 1.j*1E-12
 		self.E = self.w * unit2SI * h_bar * J2meV
 		self.i = np.linspace(0, self.N, self.N, False, dtype=int)
 		print("setting up electrode")
 		#self.electrode = el.Chain1D(self.w, sys.argv[1])
 		#self.g0 = self.electrode.g0
+		#self.g = self.electrode.g
 
 		#self.electrode = el.Square2d(self.w, sys.argv[1])
 		#self.g0 = self.electrode.g0
@@ -102,7 +98,7 @@ class PhononTransport:
 		self.electrode = el.Ribbon2D(self.w, sys.argv[1])
 		self.g0 = self.electrode.g0
 		self.g = self.electrode.g
-		self.electrode.plot_g()
+		#self.electrode.plot_g()
 
 		print("electrode done")
 
@@ -110,7 +106,12 @@ class PhononTransport:
 		self.Sigma = self.calculate_Sigma(self.w, self.g0, gamma, self.M_L, self.M_C)
 		# set up dynamical matrix K
 		#self.D = top.create_dynamical_matrix(filename_hessian, self.coord_path, t2SI=False, dimensions=self.dimension)
-		self.D = Chain1D(0.1*(constants.eV2hartree / constants.ang2bohr ** 2), N_chain).hessian
+		#self.D = Chain1D(0.1*(constants.eV2hartree / constants.ang2bohr ** 2), N_chain).hessian
+		# pfusch!!
+		self.scatter = FiniteLattice2D()
+		#self.scatter = Chain1D(0.1*(constants.eV2hartree / constants.ang2bohr ** 2), N_chain)
+		self.dimension = self.scatter.dimension
+		self.D = self.scatter.hessian
 		self.coord = top.read_coord_file(self.coord_path)
 
 		self._G_cc = np.ones((N,self.D.shape[0], self.D.shape[1]), dtype=complex)
@@ -188,19 +189,9 @@ class PhononTransport:
 		gamma_prime = gamma_hb / np.sqrt(M_C * M_L)
 
 		g = self.g
-		print("transport", g)
 		#self.g = g
 
-		fig, ax1 = plt.subplots()
-		ax1.plot(self.E, np.imag(g)*gamma_hb, color="red", label="Im(g0)")
-		ax1.plot(self.E, np.real(g)*gamma_hb, color="green", label="Re(g0)")
-		#ax1.set_ylim(-1E1,10)
-		plt.grid()
-		plt.legend()
-		plt.show()
-		plt.savefig(self.data_path + "/g_produced.pdf", bbox_inches='tight')
-		#"""
-		sigma_nu = gamma_prime ** 2 * g
+		sigma_nu = np.dot(gamma_prime ** 2,g)
 
 		return sigma_nu
 
@@ -240,19 +231,55 @@ class PhononTransport:
 			lower = 2
 		else:
 			lower = 0
-
+		# This is for every other system
+		"""
 		for n_l_ in n_l:
 			for u in range(lower, self.dimension):
 				sigma_L[n_l_ * self.dimension + u, n_l_ * self.dimension + u] = sigma[i]
 		for n_r_ in n_r:
 			for u in range(lower, self.dimension):
 				sigma_R[n_r_ * self.dimension + u, n_r_ * self.dimension + u] = sigma[i]
+		##"""
+		#"""
+		# This is only for 2DRibbon
+		block_shape = self.scatter.N_y*2
+		sigma_L[0:block_shape, 0:block_shape] = sigma[i]
+		if (self.scatter.N_x >= 1):
+			sigma_R[sigma_R.shape[0]-block_shape:sigma_R.shape[0], sigma_R.shape[0]-block_shape:sigma_R.shape[0]] = sigma[i]
 
+		# correct momentum conservation (This part is for 2D Ribbon)
+		gamma_hb = gamma * eV2hartree / ang2bohr ** 2
+		for j in range(0,block_shape):
+			# (This can be used to couple just x-components)
+			if(j%2==1):
+				#continue
+				pass
+			# remove mass weighting
+			K_ = D[j,j] * top.atom_weight(self.M_C)
+			# correct momentum
+			K_ = K_ - gamma_hb
+			# add mass weighting again
+			D_ = K_ / top.atom_weight(self.M_C)
+			D[j,j] = D_
+		for j in range(sigma_R.shape[0]-block_shape,sigma_R.shape[0]):
+			# (This can be used to couple just x-components)
+			if (j % 2 == 1):
+				#continue
+				pass
+			# remove mass weighting
+			K_ = D[j,j] * top.atom_weight(self.M_C)
+			# correct momentum
+			K_ = K_ - gamma_hb
+			# add mass weighting again
+			D_ = K_ / top.atom_weight(self.M_C)
+			D[j,j] = D_
+		#"""
 
-		# correct momentum conservation
+		"""
+		# correct momentum conservation (for every other system)
 		# convert to hartree/Bohr**2
 		gamma_hb = gamma * eV2hartree / ang2bohr ** 2
-
+		
 		for u in range(lower, self.dimension):
 			for n_l_ in n_l:
 				# remove mass weighting
@@ -271,7 +298,7 @@ class PhononTransport:
 				# add mass weighting again
 				D_ = K_ / top.atom_weight(self.M_C)
 				D[n_r_ * self.dimension + u][n_r_ * self.dimension + u] = D_
-
+		"""
 		# calculate greens function
 		G = np.linalg.inv(self.w[i] ** 2 * np.identity(self.dimension * n_atoms) - D - sigma_L - sigma_R)
 		return G
@@ -384,13 +411,24 @@ class PhononTransport:
 			lower = 2
 		else:
 			lower = 0
-
+		# This part is for every other system
+		"""
 		for n_l_ in n_l:
 			for u in range(lower, self.dimension):
 				sigma_L[n_l_ * self.dimension + u, n_l_ * self.dimension + u] = sigma[i]
 		for n_r_ in n_r:
 			for u in range(lower, self.dimension):
 				sigma_R[n_r_ * self.dimension + u, n_r_ * self.dimension + u] = sigma[i]
+		"""
+
+		# This part is for 2D Ribbon
+		#"""
+		block_shape = self.scatter.N_y * 2
+		sigma_L[0:block_shape, 0:block_shape] = sigma[i]
+		if (self.scatter.N_x >= 1):
+			sigma_R[sigma_R.shape[0] - block_shape:sigma_R.shape[0],
+			sigma_R.shape[0] - block_shape:sigma_R.shape[0]] = sigma[i]
+		#"""
 
 		Gamma_L = -2 * np.imag(sigma_L)
 		Gamma_R = -2 * np.imag(sigma_R)
@@ -504,15 +542,15 @@ class PhononTransport:
 		ax1.set_ylabel(r'Transmission $\tau_{\mathrm{ph}}$', fontsize=12)
 		ax1.axvline(self.w_D * unit2SI * h_bar / (meV2J), ls="--", color="black")
 		ax1.axhline(1, ls="--", color="black")
-		ax1.set_ylim(0, 1.5)
+		#<ax1.set_ylim(0, 1.5)
 		ax1.set_xlim(0, self.E_D)
 		ax1.grid()
-		#""""
+		""""
 		#analytic solution
 		k_c  = -self.gamma * (eV2hartree / ang2bohr ** 2)
 		transp = 4*k_c**4*np.imag(self.g)**2/((self.w**2-2*k_c-2*k_c**2*np.real(self.g))**2 + 4*k_c**4*np.imag(self.g)**2)
 		ax1.plot(self.E, transp, lw=4, alpha = 0.5)
-		#"""
+		"""
 
 		ax2.plot(self.temperature, self.kappa)
 		ax2.set_xlabel('Temperature ($K$)', fontsize=12)
