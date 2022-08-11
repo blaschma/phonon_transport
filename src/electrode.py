@@ -305,10 +305,10 @@ class Ribbon2D(Electrode):
 
     def __init__(self, w, config_path):
         super().__init__(w, config_path)
-        self.N_y = 5
+        self.N_y = 3
         self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
         self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
-        self.k_xy = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 0
+        self.k_xy = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
         self.k_c = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
         self.eps = 1E-50
         self.g0 = self.calculate_g0(w)
@@ -477,17 +477,17 @@ class Ribbon2D(Electrode):
                 pass
         """
         # This is for 2d contact x and y components connected
-        """
-        gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
-        """
-        #this is for 2d contact x and y connected but dimension mismatch (just for electrode N_y=5 contact N_y=3)
         #"""
+        gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
+        #"""
+        #this is for 2d contact x and y connected but dimension mismatch (just for electrode N_y=5 contact N_y=3)
+        """
         gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
         gamma_hb[0,0] = 0
         gamma_hb[1, 1] = 0
         gamma_hb[gamma_hb.shape[0]-1, gamma_hb.shape[0]-1] = 0
         gamma_hb[gamma_hb.shape[0] -2, gamma_hb.shape[0] - 2] = 0
-        #"""
+        """
 
         #This is for point contact
         """

@@ -113,7 +113,8 @@ class PhononTransport:
 		self.dimension = self.scatter.dimension
 		self.D = self.scatter.dimension_match(self.scatter.hessian, self.electrode.N_y)
 		#self.D = self.scatter.hessian
-		self.coord = top.read_coord_file(self.coord_path)
+		#self.coord = top.read_coord_file(self.coord_path)
+		self.coord = self.scatter.create_fake_coord_file("", xyz=False)
 
 		self._G_cc = np.ones((N,self.D.shape[0], self.D.shape[1]), dtype=complex)
 		self._trans_prob_matrix = np.ones((N, self.D.shape[0], self.D.shape[1]), dtype=complex)
@@ -383,7 +384,7 @@ class PhononTransport:
 			if (os.path.exists(calc_path + "/eigenchannels") == False):
 				os.mkdir(f"{calc_path}/eigenchannels")
 			eu.write_nmd_file(f"{calc_path}/eigenchannels/eigenchannel_{energy}.nmd", coord, displacement_matrix,
-							  channel_max)
+							  channel_max, self.dimension)
 
 		# calculate Transmission
 		T = np.sum(eigenvalues)
@@ -440,8 +441,8 @@ class PhononTransport:
 
 		Gamma_L = -2 * np.imag(sigma_L)
 		Gamma_R = -2 * np.imag(sigma_R)
-		#trans_prob_matrix = np.dot(np.dot(Gamma_L, self.G_cc[i]), np.dot(Gamma_R, np.conj(np.transpose(self.G_cc[i]))))
-		trans_prob_matrix = np.dot(np.dot(self.G_cc[i], Gamma_L), np.dot(np.conj(np.transpose(self.G_cc[i])), Gamma_R, ))
+		trans_prob_matrix = np.dot(np.dot(Gamma_L, self.G_cc[i]), np.dot(Gamma_R, np.conj(np.transpose(self.G_cc[i]))))
+		#trans_prob_matrix = np.dot(np.dot(self.G_cc[i], Gamma_L), np.dot(np.conj(np.transpose(self.G_cc[i])), Gamma_R, ))
 		return trans_prob_matrix
 
 	def calc_eigenchannel(self, E):
@@ -478,6 +479,7 @@ class PhononTransport:
 		"""
 		energy = np.round(self.w[i] * unit2SI * h_bar / (meV2J), 3)
 		trans_prob_matrix = self.calc_trans_prob_matrix_i(i)
+		#TODO: Large negative Eigenvalues
 		eigenvalues, eigenvectors = np.linalg.eigh(trans_prob_matrix + 0*np.ones(trans_prob_matrix.shape) * (1.j * 1E-25))
 		# sort eigenvalues and eigenvecors
 		idx = eigenvalues.argsort()[::-1]
@@ -505,10 +507,11 @@ class PhononTransport:
 			if (os.path.exists(self.data_path + "/eigenchannels") == False):
 				os.mkdir(f"{self.data_path}/eigenchannels")
 			eu.write_nmd_file(f"{self.data_path}/eigenchannels/eigenchannel_{energy}.nmd", self.coord, displacement_matrix,
-							  channel_max, self.dimension)
+							  channel_max, dimensions=self.dimension)
 
 		# calculate Transmission
 		T = np.sum(eigenvalues)
+		#pfusch
 		eigenvalues[0] = eigenvalues[0]+eigenvalues[-1]
 		return T, np.asarray(eigenvalues[0:channel_max], dtype=float)
 
@@ -528,8 +531,8 @@ class PhononTransport:
 		# top.write_plot_data(data_path + "/transmission_channels.dat", (T, T_val_tuple), "T (K), T_c")
 		fig, ax = plt.subplots()
 		for i in range(self.T_channel_vals.shape[1]):
-			ax.plot(self.E, self.T_channel_vals[:, i], label=i + 1)
-		ax.set_yscale('log')
+			ax.plot(self.E, self.T_channel_vals[:, i], label=i + 1, ls="--")
+		#ax.set_yscale('log')
 		ax.set_xlabel('Phonon Energy ($\mathrm{meV}$)', fontsize=12)
 		ax.set_ylabel(r'Transmission $\tau_{\mathrm{ph}}$', fontsize=12)
 		ax.axvline(self.w_D * unit2SI * h_bar / (meV2J), ls="--", color="black")
@@ -541,7 +544,7 @@ class PhononTransport:
 		plt.savefig(self.data_path + "/transport_channels.pdf", bbox_inches='tight')
 
 	def plot_transport(self):
-		print(self.T)
+		#print(self.T)
 		fig, (ax1, ax2) = plt.subplots(2, 1)
 		fig.tight_layout()
 		ax1.plot(self.E, self.T)
@@ -574,7 +577,6 @@ class PhononTransport:
 		self.calculate_T()
 		self.calc_kappa()
 		self.plot_transport()
-		print(self.eigenchannel)
 		if(self.eigenchannel==True):
 			self.plot_eigenchannels()
 			data = list([self.w])

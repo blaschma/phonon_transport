@@ -99,6 +99,12 @@ def write_nmd_file(filename, coord, displacement_matrix, n_channel_max, use_mass
             displacement = displacement_matrix[j,i]
             displacement = displacement * mass_scaling[int(j/dimensions)]
             mode_string = mode_string + " " + str(displacement)
+            # fill fake y,z coordinate for one dimensional case
+            if (dimensions == 1):
+                raise ValueError("Eigenchannel not implemented for one dimension")
+            #fill fake z coordinate for two dimensional case
+            if (dimensions == 2 and j % 2==1):
+                mode_string = mode_string + " " + str(0)
         modes.append(mode_string)
 
     with open(filename, "w") as f:

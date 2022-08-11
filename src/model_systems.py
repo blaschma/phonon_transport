@@ -1,6 +1,7 @@
 __docformat__ = "google"
 import numpy as np
 from utils import constants
+from turbomoleOutputProcessing import turbomoleOutputProcessing as top
 
 class ModelSystems:
     def __init__(self):
@@ -52,10 +53,10 @@ class FiniteLattice2D(ModelSystems):
         super().__init__()
         self.dimension = 2
         self.N_y = 3
-        self.N_x = 1
+        self.N_x = 4
         self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
         self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
-        self.k_xy = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 0
+        self.k_xy = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
         self.hessian = self.build_hessian()
 
     def build_hessian(self):
@@ -208,6 +209,10 @@ class FiniteLattice2D(ModelSystems):
         Returns:
 
         """
+        if(self.N_y == N_y_new):
+            return hessian
+        if(self.N_x>1):
+            raise ValueError("Not implemented for N_x > 1")
         assert hessian.shape[0]/2<N_y_new*2, "I can only add zeros"
         hessian_new = np.zeros((N_y_new * 2 * self.N_x, N_y_new * 2 * self.N_x), dtype=float)
         lower_index = int((N_y_new - self.N_y)/2)
@@ -215,14 +220,57 @@ class FiniteLattice2D(ModelSystems):
         self.N_y = N_y_new
         return hessian_new
 
+    def create_fake_coord_file(self, output_file="", xyz=True):
+        """
+        creates fake coord file in xyz format as default
+        Args:
+            output_file (String): Outputfile. If kept empty no file is written
+            xyz (bool): Create xyz file (True) or turbomole format (False)
+
+        Returns:
+            coord_xyz
+
+        """
+        coord_xyz = list()
+        #lattice constant in ang
+        lattice_constant = 3.0
+        #atom_type for fake coord
+        atom_type = "Au"
+        for i in range(0, self.N_y):
+            for j in range(0,self.N_x):
+                tmp = np.zeros(4, dtype=object)
+                # atom_type
+                tmp[0] = atom_type
+                #x
+                tmp[1] = j * lattice_constant
+                #y
+                tmp[2] = i * lattice_constant
+                #z
+                tmp[3] = 0
+
+                coord_xyz.append(tmp)
+        coord_xyz = np.asarray(coord_xyz)
+        if(xyz==True):
+            if(output_file != ""):
+                top.write_xyz_file(output_file, "", coord_xyz)
+            return  coord_xyz
+        else:
+            coord_turbomole = top.x2t(coord_xyz)
+            if (output_file != ""):
+                top.write_coord_file(output_file, coord_turbomole)
+            return coord_turbomole
+
+
+
 if __name__ == '__main__':
     #model_system = Chain1D(k=0.1, N =3)
     #hessian = model_system.hessian
 
     model_system = FiniteLattice2D()
     hessian = model_system.hessian
-    hessian_new = model_system.dimension_match(hessian,3)
-    print(hessian_new)
+    #hessian_new = model_system.dimension_match(hessian,3)
+    model_system.create_fake_coord_file("../../1D_test/test", False)
+
 
 
 
