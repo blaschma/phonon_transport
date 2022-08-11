@@ -80,7 +80,7 @@ class PhononTransport:
 		self.w_D = w_D / unit2SI
 		self.temperature = np.linspace(T_min, T_max, kappa_grid_points)
 
-		self.w = np.linspace(0.01*self.w_D, self.w_D * 1.1, N)
+		self.w = np.linspace(0.00*self.w_D, self.w_D * 1.1, N)
 		self.w = self.w + 1.j*1E-12
 		self.E = self.w * unit2SI * h_bar * J2meV
 		self.i = np.linspace(0, self.N, self.N, False, dtype=int)
@@ -111,7 +111,8 @@ class PhononTransport:
 		self.scatter = FiniteLattice2D()
 		#self.scatter = Chain1D(0.1*(constants.eV2hartree / constants.ang2bohr ** 2), N_chain)
 		self.dimension = self.scatter.dimension
-		self.D = self.scatter.hessian
+		self.D = self.scatter.dimension_match(self.scatter.hessian, self.electrode.N_y)
+		#self.D = self.scatter.hessian
 		self.coord = top.read_coord_file(self.coord_path)
 
 		self._G_cc = np.ones((N,self.D.shape[0], self.D.shape[1]), dtype=complex)
@@ -239,17 +240,20 @@ class PhononTransport:
 		for n_r_ in n_r:
 			for u in range(lower, self.dimension):
 				sigma_R[n_r_ * self.dimension + u, n_r_ * self.dimension + u] = sigma[i]
-		##"""
+		"""
 		#"""
 		# This is only for 2DRibbon
 		block_shape = self.scatter.N_y*2
+		#this can be used if el.Ny>scatter.Ny. Assumes symmetric mismatch
+		offset = int((self.electrode.N_y-self.scatter.N_y)/2)*2
+
 		sigma_L[0:block_shape, 0:block_shape] = sigma[i]
 		if (self.scatter.N_x >= 1):
 			sigma_R[sigma_R.shape[0]-block_shape:sigma_R.shape[0], sigma_R.shape[0]-block_shape:sigma_R.shape[0]] = sigma[i]
 
 		# correct momentum conservation (This part is for 2D Ribbon)
 		gamma_hb = gamma * eV2hartree / ang2bohr ** 2
-		for j in range(0,block_shape):
+		for j in range(offset,block_shape+offset):
 			# (This can be used to couple just x-components)
 			if(j%2==1):
 				#continue
@@ -423,11 +427,15 @@ class PhononTransport:
 
 		# This part is for 2D Ribbon
 		#"""
-		block_shape = self.scatter.N_y * 2
+		block_shape = self.electrode.N_y * 2
+		# this can be used if el.Ny>scatter.Ny. Assumes symmetric mismatch
+		offset = int((self.electrode.N_y - self.scatter.N_y) / 2)*2
+		#offset = 0
 		sigma_L[0:block_shape, 0:block_shape] = sigma[i]
 		if (self.scatter.N_x >= 1):
-			sigma_R[sigma_R.shape[0] - block_shape:sigma_R.shape[0],
-			sigma_R.shape[0] - block_shape:sigma_R.shape[0]] = sigma[i]
+			sigma_R[sigma_R.shape[0] - block_shape :sigma_R.shape[0] ,
+			sigma_R.shape[0] - block_shape :sigma_R.shape[0] ] = sigma[i]
+
 		#"""
 
 		Gamma_L = -2 * np.imag(sigma_L)
@@ -542,7 +550,7 @@ class PhononTransport:
 		ax1.set_ylabel(r'Transmission $\tau_{\mathrm{ph}}$', fontsize=12)
 		ax1.axvline(self.w_D * unit2SI * h_bar / (meV2J), ls="--", color="black")
 		ax1.axhline(1, ls="--", color="black")
-		#<ax1.set_ylim(0, 1.5)
+		ax1.set_ylim(0, 4.0)
 		ax1.set_xlim(0, self.E_D)
 		ax1.grid()
 		""""

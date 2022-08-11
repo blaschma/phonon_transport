@@ -1,3 +1,4 @@
+__docformat__ = "google"
 import codecs
 import configparser
 from functools import partial
@@ -225,6 +226,7 @@ class Lattice3d(Electrode):
         #self.load_model_parameters()
         self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
         self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
         self.k_z = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
         self.dimension = 3
         self.N_q = 800
@@ -303,9 +305,10 @@ class Ribbon2D(Electrode):
 
     def __init__(self, w, config_path):
         super().__init__(w, config_path)
-        self.N_y = 3
-        self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 0
+        self.N_y = 5
+        self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
         self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
+        self.k_xy = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 0
         self.k_c = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
         self.eps = 1E-50
         self.g0 = self.calculate_g0(w)
@@ -349,7 +352,9 @@ class Ribbon2D(Electrode):
             for i in range(0,H_NN.shape[0]):
                 # x components
                 if(i%2 == 0):
-                    H_NN[i,i] = 2*self.k_x
+                    H_NN[i, i + 1] = -self.k_xy
+                    H_NN[i + 1, i] = -self.k_xy
+                    H_NN[i, i] = 2*self.k_x + self.k_xy
                 # y components
                 else:
                     # offdiagonals
@@ -358,14 +363,18 @@ class Ribbon2D(Electrode):
                     if (i > 1):
                         H_NN[i, i - 2] = -self.k_y
                     # diagonals
-                    H_NN[i, i] = -np.sum(H_NN[i, 1::2])
+                    # vielleicht ist das falsch
+                    H_NN[i, i] = -np.sum(H_NN[i, :])
+                    # H_NN[i, i] = -np.sum(H_NN[i, 1::2])
             return H_NN
         def build_H_00_spacial():
             H_00 = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
             for i in range(0, H_00.shape[0]):
-                # x components
+                # x components (and xy components)
                 if (i % 2 == 0):
-                    H_00[i, i] = self.k_x
+                    H_00[i, i + 1] = -self.k_xy
+                    H_00[i + 1, i] = -self.k_xy
+                    H_00[i, i] = self.k_x + self.k_xy
                 # y components
                 else:
                     # offdiagonals
@@ -374,16 +383,22 @@ class Ribbon2D(Electrode):
                     if (i > 1):
                         H_00[i, i - 2] = -self.k_y
                     # diagonals
-                    H_00[i, i] = -np.sum(H_00[i, 1::2])
+                    #vielleicht ist das falsch
+                    H_00[i, i] = -np.sum(H_00[i, :])
+                    #H_00[i, i] = -np.sum(H_00[i, 1::2])
             return H_00
 
         def build_H_01_spacial():
+
             H_01 = np.zeros((2 * self.N_y, 2 * self.N_y), dtype=float)
             for i in range(0, H_01.shape[0]):
                 #x components
                 if(i%2==0):
                     #H_01[i,i+2] = -self.k_x
                     H_01[i, i] = -self.k_x
+                    #H_01[i, i+1] = -self.k_xy
+                    #H_01[i+1, i] = -self.k_xy
+
                 if (i > 1):
                     #H_01[i, i - 2] = -self.k_y
                     pass
@@ -400,8 +415,10 @@ class Ribbon2D(Electrode):
 
         H_01_dagger = np.transpose(np.conj(H_01))
 
+        assert np.sum(H_00+H_01)==0 and np.sum(H_NN+2*H_01)==0, "sum rule cannot be fullfilled"
+
         def calc_g0_w(w):
-            w = np.identity(H_NN.shape[0]) * (w **2 +(1.j*1E-12))
+            w = np.identity(H_NN.shape[0]) * (w **2 +(1.j*1E-24))
             g = np.linalg.inv(w-H_NN)
             alpha_i = np.dot(np.dot(H_01, g), H_01)
             beta_i = np.dot(np.dot(H_01_dagger, g), H_01_dagger)
@@ -451,19 +468,42 @@ class Ribbon2D(Electrode):
         Returns:
         g	(array_like) Surface greens function coupled by dyson equation
         """
+        #This is for 2d contact only x components connected
+        """
         gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
         for i in range(0, gamma_hb.shape[0]):
             if(i%2==1):
                 #gamma_hb[i,i] = 0
                 pass
+        """
+        # This is for 2d contact x and y components connected
+        """
+        gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
+        """
+        #this is for 2d contact x and y connected but dimension mismatch (just for electrode N_y=5 contact N_y=3)
+        #"""
+        gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
+        gamma_hb[0,0] = 0
+        gamma_hb[1, 1] = 0
+        gamma_hb[gamma_hb.shape[0]-1, gamma_hb.shape[0]-1] = 0
+        gamma_hb[gamma_hb.shape[0] -2, gamma_hb.shape[0] - 2] = 0
+        #"""
+
+        #This is for point contact
+        """
+        gamma_hb = np.zeros(g_0[0].shape)
+        gamma_hb[int(gamma_hb.shape[0] / 2) - 1, int(gamma_hb.shape[0] / 2) - 1] = -self.k_c
+        """
 
         def worker(g_0):
             gamma_prime = gamma_hb
             #dyson equation
             g = np.dot(g_0, np.linalg.inv(np.identity(g_0.shape[0]) + np.dot(gamma_prime , g_0)))
 
+            #return g[1,1]
             #return g[int(g_0.shape[0] / 2)-1, int(g_0.shape[0] / 2)-1]
             #return g[int(g_0.shape[0] / 2), int(g_0.shape[0] / 2)]
+            #return np.trace(g_0[int(g_0.shape[0] / 2):int(g_0.shape[0] / 2) + 2,int(g_0.shape[0] / 2):int(g_0.shape[0] / 2) + 2])
             return g
 
         g = map(worker, g_0)
@@ -475,8 +515,8 @@ class Ribbon2D(Electrode):
 
 if __name__ == '__main__':
 
-    N = 500
-    E_D = 30
+    N = 750
+    E_D = 50
     config_path = "../../1D_test/phonon_config"
     # convert to J
     E_D = E_D * constants.meV2J

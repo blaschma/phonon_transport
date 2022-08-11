@@ -17,4 +17,4 @@ if __name__ == '__main__':
     unit = np.sqrt((1/har2J)/((1/bohr2m)**2*(1/u2kg)))
     print(1/unit)
     print(unit2SI)
-    print(2*np.sqrt(0.002 * (eV2hartree / ang2bohr ** 2))*unit2SI * h_bar * J2meV)
+    print(2*np.sqrt(0.1 * (eV2hartree / ang2bohr ** 2))*unit2SI * h_bar * J2meV)
