@@ -17,12 +17,14 @@ from utils import constants
 class Electrode():
     """Class for the definition of a electrode """
 
-    def __init__(self,w, config_path):
+    def __init__(self,w, config_path, model=-1):
         self.w = w
         self.dimension = -1
         self.cfg = configparser.ConfigParser()
         self.cfg.read_file(codecs.open(config_path, "r", "utf8"))
         self.data_path = str(self.cfg.get('Data Input', 'data_path'))
+        #set for different calculations
+        self.model = model
 
     def calcalculate_g0(self):
         return
@@ -49,8 +51,8 @@ class Electrode():
         fig, ax1 = plt.subplots()
         # """
         #print((np.imag(self.g0)))
-        ax1.plot(w * constants.unit2SI * constants.h_bar * constants.J2meV, np.imag(self.g0) * self.k_c, color="red", label="Im(g0)")
-        ax1.plot(w * constants.unit2SI * constants.h_bar * constants.J2meV, np.real(self.g0) * self.k_c, color="green", label="Re(g0)")
+        ax1.plot(self.w * constants.unit2SI * constants.h_bar * constants.J2meV, np.imag(self.g0) * self.k_c, color="red", label="Im(g0)")
+        ax1.plot(self.w * constants.unit2SI * constants.h_bar * constants.J2meV, np.real(self.g0) * self.k_c, color="green", label="Re(g0)")
         #ax1.set_yscale("log")
         #ax1.set_ylim(-5, 5)
         plt.xlabel("Energy (meV)")
@@ -59,7 +61,7 @@ class Electrode():
         plt.legend()
         plt.title(r"$g_0$")
         plt.show()
-        plt.savefig(self.data_path + "/g0_2d.pdf", bbox_inches='tight')
+        plt.savefig(self.data_path + "/g0_from_electrode.pdf", bbox_inches='tight')
 
     def plot_g(self):
         fig, ax1 = plt.subplots()
@@ -84,11 +86,16 @@ class Electrode():
 
 class DebeyeModel(Electrode):
 
-    def __init__(self, w, config_path):
-        super().__init__(w, config_path)
+    def __init__(self, w, config_path, model, k_c, w_D):
+        super().__init__(w, config_path, model)
+        self.k_c = k_c * (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.w_D = w_D
+        
         #self.load_model_parameters()
         #check! dimension might be other as well
-        self.dimension = 3
+        self.dimension = 1
+        self.g0 = self.calculate_g0(w, w_D)
+        self.g = self.calculate_g(self.g0)
 
     def calculate_g0(self, w, w_D):
         """Calculates surface greens function according to Markussen, T. (2013). Phonon interference effects in molecular junctions. The Journal of chemical physics, 139(24), 244101 (https://doi.org/10.1063/1.4849178).
@@ -114,6 +121,24 @@ class DebeyeModel(Electrode):
         g0 = np.asarray((Re_g + 1.j * Im_g), complex)
 
         return g0
+
+    def calculate_g(self, g_0):
+        """
+
+        Args:
+        g_0 (array_like): Uncoupled surface greens function
+
+        Returns:
+        g	(array_like) Surface greens function coupled by dyson equation
+        """
+
+        gamma_hb = -self.k_c
+        gamma_prime = gamma_hb
+        #g = np.dot(g_0, np.linalg.inv(np.identity(g_0.shape[0]) + np.dot(gamma_prime,g_0)))
+        g = g_0 / (1 + gamma_prime * g_0)
+
+
+        return g
 
     def load_model_parameters(self):
         self.E_D = float(self.cfg.get('Electrode', 'E_D'))
@@ -160,12 +185,12 @@ class Chain1D(Electrode):
 
 class Square2d(Electrode):
 
-    def __init__(self, w, config_path):
-        super().__init__(w, config_path)
+    def __init__(self, w, config_path, model):
+        super().__init__(w, config_path, model)
         #self.w = w + 1E-32 * 1.j
         #self.load_model_parameters()
         self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
-        self.k_y = 0.002 * (constants.eV2hartree / constants.ang2bohr ** 2)*0
+        self.k_y = 0.002 * (constants.eV2hartree / constants.ang2bohr ** 2)*1
         self.dimension = 1
         self.N_q = 1000
         self.k_c = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
@@ -303,13 +328,13 @@ class Lattice3d(Electrode):
 
 class Ribbon2D(Electrode):
 
-    def __init__(self, w, config_path):
-        super().__init__(w, config_path)
-        self.N_y = 3
-        self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
-        self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
-        self.k_xy = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
-        self.k_c = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2)
+    def __init__(self, w, config_path, model, N_y, k_x, k_y, k_xy, k_c):
+        super().__init__(w, config_path, model)
+        self.N_y = N_y
+        self.k_x = k_x * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
+        self.k_y = k_y * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
+        self.k_xy = k_xy * (constants.eV2hartree / constants.ang2bohr ** 2) * 0
+        self.k_c = k_c * (constants.eV2hartree / constants.ang2bohr ** 2)
         self.eps = 1E-50
         self.g0 = self.calculate_g0(w)
         self.g = self.calculate_g(self.g0)
@@ -460,7 +485,7 @@ class Ribbon2D(Electrode):
         #"""
 
     def calculate_g(self, g_0):
-        """Calculates surface greens of 2d half infinite square lattic (nearest neighbor coupling)
+        """Calculates surface greens of 2d half infinite square lattice (nearest neighbor coupling)
 
         Args:
         g_0 (array_like): Uncoupled surface greens function
@@ -468,18 +493,37 @@ class Ribbon2D(Electrode):
         Returns:
         g	(array_like) Surface greens function coupled by dyson equation
         """
+
+        if(self.model==1):
+            # This is for point contact only x connected
+            gamma_hb = np.zeros(g_0[0].shape)
+            gamma_hb[int(gamma_hb.shape[0] / 2) - 1, int(gamma_hb.shape[0] / 2) - 1] = -self.k_c
+        if (self.model == 3):
+            # This is for point contact x&y connected
+            gamma_hb = np.zeros(g_0[0].shape)
+            gamma_hb[int(gamma_hb.shape[0] / 2) - 1, int(gamma_hb.shape[0] / 2) - 1] = -self.k_c
+            gamma_hb[int(gamma_hb.shape[0] / 2), int(gamma_hb.shape[0] / 2)] = -self.k_c
+        if (self.model == 5):
+            gamma_hb = np.zeros(g_0[0].shape)
+            #couple only x
+            for u in range(0,gamma_hb.shape[0]):
+                if(u%2==0):
+                    gamma_hb[u, u] = -self.k_c
+
+
+
         #This is for 2d contact only x components connected
         """
         gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
         for i in range(0, gamma_hb.shape[0]):
             if(i%2==1):
-                #gamma_hb[i,i] = 0
+                gamma_hb[i,i] = 0
                 pass
         """
         # This is for 2d contact x and y components connected
-        #"""
+        """
         gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
-        #"""
+        """
         #this is for 2d contact x and y connected but dimension mismatch (just for electrode N_y=5 contact N_y=3)
         """
         gamma_hb = -self.k_c * np.identity(g_0[0].shape[0])
@@ -489,10 +533,14 @@ class Ribbon2D(Electrode):
         gamma_hb[gamma_hb.shape[0] -2, gamma_hb.shape[0] - 2] = 0
         """
 
-        #This is for point contact
+
+
+        # This is for point contact x and y connected
         """
         gamma_hb = np.zeros(g_0[0].shape)
         gamma_hb[int(gamma_hb.shape[0] / 2) - 1, int(gamma_hb.shape[0] / 2) - 1] = -self.k_c
+        gamma_hb[int(gamma_hb.shape[0] / 2) , int(gamma_hb.shape[0] / 2) ] = -self.k_c
+
         """
 
         def worker(g_0):
@@ -501,9 +549,14 @@ class Ribbon2D(Electrode):
             g = np.dot(g_0, np.linalg.inv(np.identity(g_0.shape[0]) + np.dot(gamma_prime , g_0)))
 
             #return g[1,1]
-            #return g[int(g_0.shape[0] / 2)-1, int(g_0.shape[0] / 2)-1]
+            if(self.model == 1):
+                return g[int(g_0.shape[0] / 2)-1, int(g_0.shape[0] / 2)-1]
+            elif(self.model == 3):
+                return g[int(g_0.shape[0] / 2)-1:int(g_0.shape[0] / 2)+1, int(g_0.shape[0] / 2)-1:int(g_0.shape[0] / 2)+1]
             #return g[int(g_0.shape[0] / 2), int(g_0.shape[0] / 2)]
             #return np.trace(g_0[int(g_0.shape[0] / 2):int(g_0.shape[0] / 2) + 2,int(g_0.shape[0] / 2):int(g_0.shape[0] / 2) + 2])
+            elif(self.model == 5):
+                return g
             return g
 
         g = map(worker, g_0)

@@ -49,14 +49,14 @@ class FiniteLattice2D(ModelSystems):
 
     """
 
-    def __init__(self):
+    def __init__(self, N_y, N_x, k_x, k_y, k_xy):
         super().__init__()
         self.dimension = 2
-        self.N_y = 3
-        self.N_x = 4
-        self.k_x = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
-        self.k_y = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
-        self.k_xy = 0.1 * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
+        self.N_y = N_y
+        self.N_x = N_x
+        self.k_x = k_x * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
+        self.k_y = k_y * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
+        self.k_xy = k_xy * (constants.eV2hartree / constants.ang2bohr ** 2) * 1
         self.hessian = self.build_hessian()
 
     def build_hessian(self):

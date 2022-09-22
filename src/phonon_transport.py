@@ -58,8 +58,8 @@ class PhononTransport:
 		self.n_l = n_l
 		self.n_r = n_r
 		#pfusch
-		N_chain = 1
-		self.n_r =[N_chain-1]
+
+
 		self.gamma = gamma
 		self.in_plane = in_plane
 		self.eigenchannel = eigenchannel
@@ -81,13 +81,82 @@ class PhononTransport:
 		self.temperature = np.linspace(T_min, T_max, kappa_grid_points)
 
 		self.w = np.linspace(0.00*self.w_D, self.w_D * 1.1, N)
-		self.w = self.w + 1.j*1E-12
+		#self.w = self.w + 1.j*1E-12
 		self.E = self.w * unit2SI * h_bar * J2meV
 		self.i = np.linspace(0, self.N, self.N, False, dtype=int)
 		print("setting up electrode")
-		#self.electrode = el.Chain1D(self.w, sys.argv[1])
-		#self.g0 = self.electrode.g0
-		#self.g = self.electrode.g
+
+
+
+		self.model = 0
+		# 0...1D Chain electrode with 1D chain scatter
+		# 1...2D Ribbon electrode (finite) with 1D chain scatter (only x connected)
+		# 2...2D electrode (half-finite) with 1D chain scatter (only x connected)
+		# 3...2D electrode (finite) with 2D ribbon scatter (-> as chain) ( x&y connected)
+		# 4...Debeye model electrode with 1D chain scatter (only x connected)
+		# 5...2D electrode (finite N_y=3) with 2d ribbon scatter (->N_y=3)
+
+		if(self.model == 0):
+			self.electrode = el.Chain1D(self.w, sys.argv[1])
+			self.g0 = self.electrode.g0
+			self.g = self.electrode.g
+			#self.electrode.plot_g()
+			#self.electrode.plot_g0()
+			N_chain = 1
+			self.n_r = [N_chain - 1]
+			self.scatter = Chain1D(0.1 * (constants.eV2hartree / constants.ang2bohr ** 2), N_chain)
+
+		if(self.model == 1):
+			self.electrode = el.Ribbon2D(self.w, sys.argv[1], self.model, N_y=7, k_x=0.1, k_y=0.1, k_xy=0, k_c=0.1)
+			self.g0 = self.electrode.g0
+			self.g = self.electrode.g
+			# self.electrode.plot_g()
+			# self.electrode.plot_g0()
+			N_chain = 1
+			self.n_r = [N_chain - 1]
+			self.scatter = Chain1D(0.1 * (constants.eV2hartree / constants.ang2bohr ** 2), N_chain)
+
+		if (self.model == 2):
+			self.electrode = el.Square2d(self.w, sys.argv[1], self.model)
+			self.g0 = self.electrode.g0
+			self.g = self.electrode.g
+			# self.electrode.plot_g()
+			# self.electrode.plot_g0()
+			#Problems with N_chan >= 4
+			N_chain = 1
+			self.n_r = [N_chain - 1]
+			self.scatter = Chain1D(0.1 * (constants.eV2hartree / constants.ang2bohr ** 2), N_chain)
+
+		if (self.model == 3):
+			#ToDO: Longer chain length!
+			self.electrode = el.Ribbon2D(self.w, sys.argv[1], self.model, N_y=3, k_x=0.1, k_y=0.1, k_xy=0, k_c=0.1)
+			self.g0 = self.electrode.g0
+			self.g = self.electrode.g
+			# self.electrode.plot_g()
+			# self.electrode.plot_g0()
+			N_chain = 1
+			self.n_r = [N_chain - 1]
+			self.scatter = FiniteLattice2D(N_y=1, N_x=N_chain, k_x=0.1, k_y=0.1, k_xy=0.0)
+
+		if (self.model == 4):
+			self.electrode = el.DebeyeModel(self.w, sys.argv[1], k_c=0.1, model=4, w_D=self.w_D)
+			self.g0 = self.electrode.g0
+			self.g = self.electrode.g
+			self.electrode.plot_g()
+			self.electrode.plot_g0()
+			N_chain = 1
+			self.n_r = [N_chain - 1]
+			self.scatter = Chain1D(0.1 * (constants.eV2hartree / constants.ang2bohr ** 2), N_chain)
+			self.model = 0
+
+		if(self.model == 5):
+			self.electrode = el.Ribbon2D(self.w, sys.argv[1], self.model, N_y=3, k_x=0.1, k_y=0.1, k_xy=0, k_c=0.1)
+			self.g0 = self.electrode.g0
+			self.g = self.electrode.g
+			N_chain = 1
+			self.scatter = FiniteLattice2D(N_y=3, N_x=N_chain, k_x=0.1, k_y=0.1, k_xy=0.0)
+
+
 
 		#self.electrode = el.Square2d(self.w, sys.argv[1])
 		#self.g0 = self.electrode.g0
@@ -95,9 +164,9 @@ class PhononTransport:
 		#self.electrode = el.Lattice3d(self.w, sys.argv[1])
 		#self.g0 = self.electrode.g0
 
-		self.electrode = el.Ribbon2D(self.w, sys.argv[1])
-		self.g0 = self.electrode.g0
-		self.g = self.electrode.g
+		#self.electrode = el.Ribbon2D(self.w, sys.argv[1])
+		#self.g0 = self.electrode.g0
+		#self.g = self.electrode.g
 		#self.electrode.plot_g()
 
 		print("electrode done")
@@ -108,13 +177,13 @@ class PhononTransport:
 		#self.D = top.create_dynamical_matrix(filename_hessian, self.coord_path, t2SI=False, dimensions=self.dimension)
 		#self.D = Chain1D(0.1*(constants.eV2hartree / constants.ang2bohr ** 2), N_chain).hessian
 		# pfusch!!
-		self.scatter = FiniteLattice2D()
-		#self.scatter = Chain1D(0.1*(constants.eV2hartree / constants.ang2bohr ** 2), N_chain)
+		#self.scatter = FiniteLattice2D()
+
 		self.dimension = self.scatter.dimension
-		self.D = self.scatter.dimension_match(self.scatter.hessian, self.electrode.N_y)
-		#self.D = self.scatter.hessian
-		#self.coord = top.read_coord_file(self.coord_path)
-		self.coord = self.scatter.create_fake_coord_file("", xyz=False)
+		#self.D = self.scatter.dimension_match(self.scatter.hessian, self.electrode.N_y)
+		self.D = self.scatter.hessian
+		self.coord = top.read_coord_file(self.coord_path)
+		#self.coord = self.scatter.create_fake_coord_file("", xyz=False)
 
 		self._G_cc = np.ones((N,self.D.shape[0], self.D.shape[1]), dtype=complex)
 		self._trans_prob_matrix = np.ones((N, self.D.shape[0], self.D.shape[1]), dtype=complex)
@@ -233,77 +302,64 @@ class PhononTransport:
 			lower = 2
 		else:
 			lower = 0
-		# This is for every other system
-		"""
-		for n_l_ in n_l:
+
+		sigma_L, sigma_R = self.set_up_Sigma_matrices(i)
+
+
+
+		#correct momentum conservation
+		if(self.model == 0 or self.model == 1 or self.model == 2):
+			# correct momentum conservation (for every other system)
+			# convert to hartree/Bohr**2
+			gamma_hb = gamma * eV2hartree / ang2bohr ** 2
+
 			for u in range(lower, self.dimension):
-				sigma_L[n_l_ * self.dimension + u, n_l_ * self.dimension + u] = sigma[i]
-		for n_r_ in n_r:
-			for u in range(lower, self.dimension):
-				sigma_R[n_r_ * self.dimension + u, n_r_ * self.dimension + u] = sigma[i]
-		"""
-		#"""
-		# This is only for 2DRibbon
-		block_shape = self.scatter.N_y*2
-		#this can be used if el.Ny>scatter.Ny. Assumes symmetric mismatch
-		offset = int((self.electrode.N_y-self.scatter.N_y)/2)*2
+				for n_l_ in n_l:
+					# remove mass weighting
+					K_ = D[n_l_ * self.dimension + u][n_l_ * self.dimension + u] * top.atom_weight(self.M_C)
+					# correct momentum
+					K_ = K_ - gamma_hb
+					# add mass weighting again
+					D_ = K_ / top.atom_weight(self.M_C)
+					D[n_l_ * self.dimension + u][n_l_ * self.dimension + u] = D_
 
-		sigma_L[0:block_shape, 0:block_shape] = sigma[i]
-		if (self.scatter.N_x >= 1):
-			sigma_R[sigma_R.shape[0]-block_shape:sigma_R.shape[0], sigma_R.shape[0]-block_shape:sigma_R.shape[0]] = sigma[i]
+				for n_r_ in n_r:
+					# remove mass weighting
+					K_ = D[n_r_ * self.dimension + u][n_r_ * self.dimension + u] * top.atom_weight(self.M_C)
+					# correct momentum
+					K_ = K_ - gamma_hb
+					# add mass weighting again
+					D_ = K_ / top.atom_weight(self.M_C)
+					D[n_r_ * self.dimension + u][n_r_ * self.dimension + u] = D_
 
-		# correct momentum conservation (This part is for 2D Ribbon)
-		gamma_hb = gamma * eV2hartree / ang2bohr ** 2
-		for j in range(offset,block_shape+offset):
-			# (This can be used to couple just x-components)
-			if(j%2==1):
-				#continue
-				pass
-			# remove mass weighting
-			K_ = D[j,j] * top.atom_weight(self.M_C)
-			# correct momentum
-			K_ = K_ - gamma_hb
-			# add mass weighting again
-			D_ = K_ / top.atom_weight(self.M_C)
-			D[j,j] = D_
-		for j in range(sigma_R.shape[0]-block_shape,sigma_R.shape[0]):
-			# (This can be used to couple just x-components)
-			if (j % 2 == 1):
-				#continue
-				pass
-			# remove mass weighting
-			K_ = D[j,j] * top.atom_weight(self.M_C)
-			# correct momentum
-			K_ = K_ - gamma_hb
-			# add mass weighting again
-			D_ = K_ / top.atom_weight(self.M_C)
-			D[j,j] = D_
-		#"""
-
-		"""
-		# correct momentum conservation (for every other system)
-		# convert to hartree/Bohr**2
-		gamma_hb = gamma * eV2hartree / ang2bohr ** 2
-		
-		for u in range(lower, self.dimension):
-			for n_l_ in n_l:
+		if(self.model == 3 or self.model == 5):
+			# correct momentum conservation (This part is for 2D Ribbon)
+			gamma_hb = gamma * eV2hartree / ang2bohr ** 2
+			block_shape = self.scatter.N_y * 2
+			for j in range(self.n_l[0], block_shape + self.n_l[0]):
+				# (This can be used to couple just x-components)
+				#if (j % 2 == 0):
+				#	continue
+				#	pass
 				# remove mass weighting
-				K_ = D[n_l_ * self.dimension + u][n_l_ * self.dimension + u] * top.atom_weight(self.M_C)
+				K_ = D[j, j] * top.atom_weight(self.M_C)
 				# correct momentum
 				K_ = K_ - gamma_hb
 				# add mass weighting again
 				D_ = K_ / top.atom_weight(self.M_C)
-				D[n_l_ * self.dimension + u][n_l_ * self.dimension + u] = D_
-
-			for n_r_ in n_r:
+				D[j, j] = D_
+			for j in range(sigma_R.shape[0] - block_shape, sigma_R.shape[0]):
+				# (This can be used to couple just x-components)
+				#if (j % 2 == 1):
+				#	# continue
+				#	pass
 				# remove mass weighting
-				K_ = D[n_r_ * self.dimension + u][n_r_ * self.dimension + u] * top.atom_weight(self.M_C)
+				K_ = D[j, j] * top.atom_weight(self.M_C)
 				# correct momentum
 				K_ = K_ - gamma_hb
 				# add mass weighting again
 				D_ = K_ / top.atom_weight(self.M_C)
-				D[n_r_ * self.dimension + u][n_r_ * self.dimension + u] = D_
-		"""
+				D[j, j] = D_
 		# calculate greens function
 		G = np.linalg.inv(self.w[i] ** 2 * np.identity(self.dimension * n_atoms) - D - sigma_L - sigma_R)
 		return G
@@ -390,6 +446,54 @@ class PhononTransport:
 		T = np.sum(eigenvalues)
 		return T, eigenvalues[0:channel_max]
 
+	def set_up_Sigma_matrices(self, i):
+		"""
+		Sets up self energy matrices for model calculations
+		Args:
+			i: index
+
+		Returns:
+			Sigma_L, Sigma_R
+		"""
+		n_l = self.n_l
+		n_r = self.n_r
+		n_atoms = int(self.D.shape[0] / self.dimension)
+		# set up self energies
+		sigma_L = np.zeros((n_atoms * self.dimension, n_atoms * self.dimension), complex)
+		sigma_R = np.zeros((n_atoms * self.dimension, n_atoms * self.dimension), complex)
+		# ToDo remove in_plane or to in good way
+		if (in_plane == True):
+			lower = 2
+		else:
+			lower = 0
+		# This part is for every other system
+		if (self.model == 0 or self.model == 1 or self.model == 2):
+			for n_l_ in n_l:
+				for u in range(lower, self.dimension):
+					sigma_L[n_l_ * self.dimension + u, n_l_ * self.dimension + u] = self.Sigma[i]
+			for n_r_ in n_r:
+				for u in range(lower, self.dimension):
+					sigma_R[n_r_ * self.dimension + u, n_r_ * self.dimension + u] = self.Sigma[i]
+
+		if (self.model == 3):
+			# This part is for 2D Ribbon
+			block_shape = self.electrode.N_y * 2
+			# this can be used if el.Ny>scatter.Ny. Assumes symmetric mismatch
+			offset = int((self.electrode.N_y - self.scatter.N_y) / 2) * 2
+			# offset = 0
+			sigma_L[0:block_shape, 0:block_shape] = self.Sigma[i]
+			if (self.scatter.N_x >= 1):
+				sigma_R[sigma_R.shape[0] - block_shape:sigma_R.shape[0],
+				sigma_R.shape[0] - block_shape:sigma_R.shape[0]] = self.Sigma[i]
+
+		if (self.model == 5):
+			for n_l_ in n_l:
+				sigma_L[n_l_: n_l_ + self.Sigma[i].shape[0], n_l_: n_l_ + self.Sigma[i].shape[0]] = self.Sigma[i]
+			for n_r_ in n_r:
+				sigma_R[n_r_: n_r_ + self.Sigma[i].shape[0], n_r_: n_r_ + self.Sigma[i].shape[0]] = self.Sigma[i]
+		return sigma_L, sigma_R
+
+
 	def calc_trans_prob_matrix_i(self, i):
 		"""
 		Calculates transmission prob matrix at w[i].
@@ -400,44 +504,13 @@ class PhononTransport:
 
 		"""
 
-		sigma = self.Sigma
-		n_l = self.n_l
-		n_r = self.n_r
+
+
 		in_plane = self.in_plane
 		D = self.D
-		D = copy.copy(D)
 
-		n_atoms = int(D.shape[0] / self.dimension)
+		sigma_L, sigma_R = self.set_up_Sigma_matrices(i)
 
-		# set up self energies
-		sigma_L = np.zeros((n_atoms * self.dimension, n_atoms * self.dimension), complex)
-		sigma_R = np.zeros((n_atoms * self.dimension, n_atoms * self.dimension), complex)
-		if (in_plane == True):
-			lower = 2
-		else:
-			lower = 0
-		# This part is for every other system
-		"""
-		for n_l_ in n_l:
-			for u in range(lower, self.dimension):
-				sigma_L[n_l_ * self.dimension + u, n_l_ * self.dimension + u] = sigma[i]
-		for n_r_ in n_r:
-			for u in range(lower, self.dimension):
-				sigma_R[n_r_ * self.dimension + u, n_r_ * self.dimension + u] = sigma[i]
-		"""
-
-		# This part is for 2D Ribbon
-		#"""
-		block_shape = self.electrode.N_y * 2
-		# this can be used if el.Ny>scatter.Ny. Assumes symmetric mismatch
-		offset = int((self.electrode.N_y - self.scatter.N_y) / 2)*2
-		#offset = 0
-		sigma_L[0:block_shape, 0:block_shape] = sigma[i]
-		if (self.scatter.N_x >= 1):
-			sigma_R[sigma_R.shape[0] - block_shape :sigma_R.shape[0] ,
-			sigma_R.shape[0] - block_shape :sigma_R.shape[0] ] = sigma[i]
-
-		#"""
 
 		Gamma_L = -2 * np.imag(sigma_L)
 		Gamma_R = -2 * np.imag(sigma_R)
@@ -553,7 +626,7 @@ class PhononTransport:
 		ax1.set_ylabel(r'Transmission $\tau_{\mathrm{ph}}$', fontsize=12)
 		ax1.axvline(self.w_D * unit2SI * h_bar / (meV2J), ls="--", color="black")
 		ax1.axhline(1, ls="--", color="black")
-		ax1.set_ylim(0, 4.0)
+		ax1.set_ylim(0, 1.5)
 		ax1.set_xlim(0, self.E_D)
 		ax1.grid()
 		""""
