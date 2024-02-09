@@ -158,7 +158,7 @@ class Chain1D(Electrode):
         #self.load_model_parameters()
         self.dimension = 1
         self.k = 0.1*(constants.eV2hartree / constants.ang2bohr ** 2)
-        self.k_c = 0.1* (constants.eV2hartree / constants.ang2bohr ** 2)
+        self.k_c = 0.1* (constants.eV2hartree / constants.ang2bohr ** 2)*1.01
         self.g0 = self.calculate_g0(self.w, self.k)
         self.g = self.calculate_g(self.g0)
 
